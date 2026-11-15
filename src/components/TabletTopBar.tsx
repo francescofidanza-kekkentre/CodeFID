@@ -58,22 +58,22 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
   onOpenGuidedSetup
 }) => {
   return (
-    <header className="h-14 bg-[#0d1322]/95 border-b border-slate-800/80 px-3 flex items-center justify-between gap-2 select-none shrink-0 z-20">
+    <header className="min-h-[48px] bg-[#181818] border-b border-[#2b2b2b] px-2.5 lg:px-3 py-1 flex items-center justify-between gap-2 select-none shrink-0 z-20 overflow-x-auto no-scrollbar">
       {/* Left: Brand & Project Selector */}
-      <div className="flex items-center gap-2.5">
-        <div className="flex items-center gap-2 bg-gradient-to-r from-indigo-600/20 to-sky-500/10 border border-indigo-500/30 px-2.5 py-1.5 rounded-xl">
+      <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 bg-[#252526] border border-[#3c3c3c] px-2.5 py-1 rounded-md">
           <img
             src="./icon-192.png"
             alt="VisualFidCodingApp"
-            className="w-7 h-7 rounded-lg shadow-md shadow-indigo-600/30"
+            className="w-6 h-6 rounded shrink-0"
           />
-          <div className="leading-tight">
+          <div className="leading-tight hidden sm:block">
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-sm tracking-tight text-white">
+              <span className="font-semibold text-xs tracking-tight text-[#cccccc]">
                 VisualFidCodingApp
               </span>
-              <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                Tablet PWA
+              <span className="hidden 2xl:inline-flex text-[10px] font-medium px-1.5 py-0.5 rounded bg-[#007acc]/20 text-[#3794ff] border border-[#007acc]/40">
+                VS Code IDE
               </span>
             </div>
           </div>
@@ -81,12 +81,12 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
 
         {/* Template / Project Switcher */}
         <div className="relative flex items-center">
-          <FolderKanban className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 pointer-events-none" />
+          <FolderKanban className="w-3.5 h-3.5 text-[#858585] absolute left-2.5 pointer-events-none" />
           <select
             aria-label="Seleziona Progetto PWA"
             value={activeProject.id}
             onChange={(e) => onSelectProject(e.target.value)}
-            className="bg-slate-900/90 hover:bg-slate-800/90 text-slate-200 text-xs font-medium pl-8 pr-7 py-2 rounded-xl border border-slate-700/70 focus:outline-none focus:border-indigo-500 transition cursor-pointer"
+            className="max-w-[140px] lg:max-w-[190px] truncate bg-[#252526] hover:bg-[#2a2d2e] text-[#cccccc] text-xs font-medium pl-8 pr-6 py-1.5 min-h-[36px] rounded-md border border-[#3c3c3c] focus:outline-none focus:border-[#007acc] transition cursor-pointer"
           >
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
@@ -98,61 +98,61 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
       </div>
 
       {/* Center: Tablet Layout Mode Switcher */}
-      <div className="hidden md:flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+      <div className="flex items-center bg-[#252526] p-0.5 rounded-md border border-[#3c3c3c] shrink-0">
         <button
           onClick={() => onChangeLayout('split-3')}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${
+          className={`flex items-center gap-1.5 px-2.5 py-1 min-h-[32px] rounded text-xs font-medium transition ${
             layoutMode === 'split-3'
-              ? 'bg-indigo-600 text-white shadow'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'bg-[#007acc] text-white'
+              : 'text-[#969696] hover:text-[#cccccc]'
           }`}
           title="Vista 3 Pannelli (Agent + Codice + Live PWA)"
         >
           <Columns3 className="w-3.5 h-3.5" />
-          <span>Studio 3-Vie</span>
+          <span className="hidden lg:inline">Studio 3-Vie</span>
         </button>
         <button
           onClick={() => onChangeLayout('code-preview')}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${
+          className={`flex items-center gap-1.5 px-2.5 py-1 min-h-[32px] rounded text-xs font-medium transition ${
             layoutMode === 'code-preview'
-              ? 'bg-indigo-600 text-white shadow'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'bg-[#007acc] text-white'
+              : 'text-[#969696] hover:text-[#cccccc]'
           }`}
           title="Editor Codice + Anteprima Tablet"
         >
           <SplitSquareVertical className="w-3.5 h-3.5" />
-          <span>Codice + PWA</span>
+          <span className="hidden lg:inline">Codice + PWA</span>
         </button>
         <button
           onClick={() => onChangeLayout('agent-preview')}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${
+          className={`flex items-center gap-1.5 px-2.5 py-1 min-h-[32px] rounded text-xs font-medium transition ${
             layoutMode === 'agent-preview'
-              ? 'bg-indigo-600 text-white shadow'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'bg-[#007acc] text-white'
+              : 'text-[#969696] hover:text-[#cccccc]'
           }`}
           title="Agenti AI + Anteprima Live"
         >
           <Bot className="w-3.5 h-3.5" />
-          <span>Agent + PWA</span>
+          <span className="hidden lg:inline">Agent + PWA</span>
         </button>
         <button
           onClick={() => onChangeLayout('preview-only')}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${
+          className={`flex items-center gap-1.5 px-2.5 py-1 min-h-[32px] rounded text-xs font-medium transition ${
             layoutMode === 'preview-only'
-              ? 'bg-indigo-600 text-white shadow'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'bg-[#007acc] text-white'
+              : 'text-[#969696] hover:text-[#cccccc]'
           }`}
           title="Simulatore Tablet Schermo Intero"
         >
           <Smartphone className="w-3.5 h-3.5" />
-          <span>Simulatore</span>
+          <span className="hidden lg:inline">Simulatore</span>
         </button>
       </div>
 
       {/* Right: Quick Agent Selector, PWA Score, GitHub & Firebase */}
-      <div className="flex items-center gap-1.5">
-        {/* Agent Quick Pill */}
-        <div className="flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-slate-800">
+      <div className="flex items-center gap-1.5 shrink-0">
+        {/* Agent Quick Pill (shown on 12"-14" landscape xl+, AgentStudioPanel has cards on smaller widths) */}
+        <div className="hidden xl:flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-slate-800">
           <button
             onClick={() => onChangeAgent('antigravity')}
             className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
@@ -252,17 +252,17 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
         {/* Guided Setup Wizard */}
         <button
           onClick={onOpenGuidedSetup}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/35 border border-indigo-500/40 text-indigo-200 text-xs font-semibold transition"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[#007acc] hover:bg-[#1f8ad2] text-white text-xs font-medium transition"
           title="Modalità guidata per collegare Agente IA e GitHub"
         >
-          <Wand2 className="w-3.5 h-3.5 text-indigo-300" />
+          <Wand2 className="w-3.5 h-3.5" />
           <span className="hidden lg:inline">Setup Guidato</span>
         </button>
 
         {/* Export JSON Bundle */}
         <button
           onClick={onExportProject}
-          className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 transition"
+          className="p-2 rounded-md bg-[#252526] hover:bg-[#2a2d2e] border border-[#3c3c3c] text-[#cccccc] transition"
           title="Esporta Progetto PWA (.json)"
         >
           <Download className="w-3.5 h-3.5" />

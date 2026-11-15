@@ -112,33 +112,33 @@ export const TouchCodeEditor: React.FC<TouchCodeEditorProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0b101d] border-r border-slate-800/80 overflow-hidden">
-      {/* File Tabs Bar (Touch Scrollable) */}
-      <div className="flex items-center justify-between bg-[#0e1526] border-b border-slate-800/80 px-2 py-1.5 gap-2 overflow-x-auto no-scrollbar shrink-0">
-        <div className="flex items-center gap-1 overflow-x-auto">
+    <div className="flex flex-col h-full bg-[#1e1e1e] border-r border-[#2b2b2b] overflow-hidden">
+      {/* File Tabs Bar (VS Code style, Touch Scrollable) */}
+      <div className="flex items-center justify-between bg-[#252526] border-b border-[#2b2b2b] pr-2 gap-2 overflow-x-auto no-scrollbar shrink-0">
+        <div className="flex items-center overflow-x-auto no-scrollbar">
           {files.map((file) => {
             const isActive = file.path === activeFile?.path;
             return (
               <button
                 key={file.path}
                 onClick={() => onSelectFile(file.path)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium whitespace-nowrap border-r border-[#2b2b2b] transition ${
                   isActive
-                    ? 'bg-indigo-600/20 text-indigo-200 border border-indigo-500/40'
-                    : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200 border border-transparent'
+                    ? 'bg-[#1e1e1e] text-white border-t-2 border-t-[#007acc]'
+                    : 'bg-[#2d2d2d] text-[#969696] hover:bg-[#2a2d2e] hover:text-[#cccccc] border-t-2 border-t-transparent'
                 }`}
               >
                 {getFileIcon(file.path)}
                 <span>{file.path}</span>
                 {file.modified && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" title="Modificato" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#e2c08d]" title="Modificato" />
                 )}
               </button>
             );
           })}
           <button
             onClick={handleNewFilePrompt}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition shrink-0"
+            className="flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-[#969696] hover:text-white hover:bg-[#2a2d2e] transition shrink-0"
             title="Crea nuovo file"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -189,15 +189,15 @@ export const TouchCodeEditor: React.FC<TouchCodeEditorProps> = ({
 
       {/* Tablet Quick-Keys Touch Bar */}
       {activeFile && (
-        <div className="flex items-center gap-1 px-2.5 py-1.5 bg-[#11182b] border-b border-slate-800/80 overflow-x-auto shrink-0">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mr-1 shrink-0">
+        <div className="flex items-center gap-1 px-2.5 py-1.5 bg-[#252526] border-b border-[#2b2b2b] overflow-x-auto shrink-0">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-[#858585] mr-1 shrink-0">
             Touch Keys
           </span>
           {TOUCH_KEYS.map((k) => (
             <button
               key={k.label}
               onClick={() => handleInsertSymbol(k.insert)}
-              className="px-2.5 py-1 rounded-md bg-slate-800/90 hover:bg-indigo-600/30 active:scale-95 border border-slate-700/70 text-slate-200 font-mono text-xs transition shrink-0"
+              className="px-3 py-1.5 min-h-[34px] rounded bg-[#333333] hover:bg-[#007acc]/40 active:scale-95 border border-[#454545] text-[#cccccc] font-mono text-xs transition shrink-0"
             >
               {k.label}
             </button>
@@ -207,11 +207,11 @@ export const TouchCodeEditor: React.FC<TouchCodeEditorProps> = ({
 
       {/* Code Editor Area */}
       {activeFile ? (
-        <div className="relative flex-1 flex overflow-hidden font-mono text-xs leading-6">
+        <div className="relative flex-1 flex overflow-hidden font-mono text-xs lg:text-[13px] leading-6">
           {/* Line Numbers Gutter */}
           <div
             aria-hidden="true"
-            className="w-11 py-3 bg-[#090d18] text-slate-600 text-right pr-2.5 select-none border-r border-slate-800/60 overflow-hidden shrink-0"
+            className="w-11 py-3 bg-[#1e1e1e] text-[#858585] text-right pr-2.5 select-none border-r border-[#2b2b2b] overflow-hidden shrink-0"
           >
             {lines.map((_, idx) => (
               <div key={idx}>{idx + 1}</div>
@@ -233,20 +233,20 @@ export const TouchCodeEditor: React.FC<TouchCodeEditorProps> = ({
             autoCapitalize="off"
             autoComplete="off"
             autoCorrect="off"
-            className="flex-1 w-full h-full p-3 bg-[#0b101d] text-slate-100 font-mono text-xs leading-6 resize-none focus:outline-none overflow-auto selection:bg-indigo-500/30"
+            className="flex-1 w-full h-full p-3 bg-[#1e1e1e] text-[#d4d4d4] font-mono text-xs lg:text-[13px] leading-6 resize-none focus:outline-none overflow-auto selection:bg-[#264f78]"
             placeholder="Scrivi codice qui o chiedi a Claude / Antigravity..."
           />
         </div>
       ) : (
-        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-400">
-          <FileCode2 className="w-10 h-10 text-slate-700 mb-3" />
-          <p className="text-sm font-medium text-slate-300">Nessun file aperto</p>
-          <p className="text-xs text-slate-500 mt-1 mb-4 max-w-xs">
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-[#858585]">
+          <FileCode2 className="w-10 h-10 text-[#3c3c3c] mb-3" />
+          <p className="text-sm font-medium text-[#cccccc]">Nessun file aperto</p>
+          <p className="text-xs text-[#858585] mt-1 mb-4 max-w-xs">
             Ambiente vuoto. Crea un nuovo file o usa l&apos;AI Agent Studio per iniziare.
           </p>
           <button
             onClick={handleNewFilePrompt}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded bg-[#007acc] hover:bg-[#1f8ad2] text-white text-xs font-medium transition"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Nuovo File</span>
@@ -255,7 +255,7 @@ export const TouchCodeEditor: React.FC<TouchCodeEditorProps> = ({
       )}
 
       {/* Editor Footer Status */}
-      <div className="h-7 px-3 bg-[#090d18] border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400 shrink-0">
+      <div className="h-6 px-3 bg-[#252526] border-t border-[#2b2b2b] flex items-center justify-between text-[11px] text-[#969696] shrink-0">
         {activeFile ? (
           <>
             <div className="flex items-center gap-3">

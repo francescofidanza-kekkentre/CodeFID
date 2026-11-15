@@ -23,6 +23,8 @@ import { LivePwaPreview } from './components/LivePwaPreview';
 import { PwaBuilderModal } from './components/PwaBuilderModal';
 import { IntegrationsDrawer } from './components/IntegrationsDrawer';
 import { GuidedSetupModal, GuidedStep } from './components/GuidedSetupModal';
+import { VsCodeActivityBar } from './components/VsCodeActivityBar';
+import { VsCodeStatusBar } from './components/VsCodeStatusBar';
 
 const STORAGE_KEYS = {
   PROJECTS: 'codefid_projects_v1',
@@ -135,6 +137,9 @@ export function App() {
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const [guidedSetupOpen, setGuidedSetupOpen] = useState(false);
   const [guidedSetupStep, setGuidedSetupStep] = useState<GuidedStep>('agent');
+  const [explorerOpen, setExplorerOpen] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 1280 : false
+  );
   const [integrationsTab, setIntegrationsTab] = useState<
     'github' | 'firebase' | 'agents'
   >('github');
@@ -430,8 +435,51 @@ export function App() {
     setGuidedSetupOpen(true);
   };
 
+  const handleReplaceProjectFiles = (files: ProjectFile[], notice?: string) => {
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === activeProject.id
+          ? {
+              ...p,
+              name:
+                p.id === 'empty-workspace' && githubConfig.selectedRepo
+                  ? githubConfig.selectedRepo
+                  : p.name,
+              files,
+              updatedAt: new Date().toISOString()
+            }
+          : p
+      )
+    );
+    if (files.length > 0 && !files.some((f) => f.path === activeFilePath)) {
+      setActiveFilePath(files[0].path);
+    } else if (files.length === 0) {
+      setActiveFilePath('');
+    }
+    if (notice) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `sys-${Date.now()}`,
+          role: 'assistant',
+          agent: agentConfig.activeAgent,
+          agentLabel: 'Cloud Sync',
+          content: `✅ ${notice}`,
+          timestamp: new Date().toLocaleTimeString()
+        }
+      ]);
+    }
+  };
+
+  const activeFile = useMemo(
+    () =>
+      activeProject.files.find((f) => f.path === activeFilePath) ||
+      activeProject.files[0],
+    [activeProject.files, activeFilePath]
+  );
+
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#090d16] text-slate-100 overflow-hidden">
+    <div className="flex flex-col h-dvh w-screen bg-[#1e1e1e] text-[#cccccc] overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       {/* Top Bar */}
       <TabletTopBar
         projects={projects}
@@ -460,11 +508,45 @@ export function App() {
         onOpenGuidedSetup={() => openGuidedSetup('agent')}
       />
 
-      {/* Main Tablet Workspace Grid */}
-      <main className="flex-1 overflow-hidden">
+      {/* VS Code Body: Activity Bar + Explorer Sidebar + Main Workspace */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <VsCodeActivityBar
+          explorerOpen={explorerOpen}
+          onToggleExplorer={() => setExplorerOpen((prev) => !prev)}
+          files={activeProject.files}
+          activeFilePath={activeFile?.path || ''}
+          projectName={activeProject.name}
+          onSelectFile={(path) => {
+            setActiveFilePath(path);
+            if (layoutMode === 'agent-preview' || layoutMode === 'preview-only') {
+              setLayoutMode('split-3');
+            }
+          }}
+          onCreateFile={handleCreateFile}
+          onOpenGitHub={() => {
+            setIntegrationsTab('github');
+            setIntegrationsOpen(true);
+          }}
+          onOpenFirebase={() => {
+            setIntegrationsTab('firebase');
+            setIntegrationsOpen(true);
+          }}
+          onOpenPwaStudio={() => setPwaStudioOpen(true)}
+          onOpenSettings={() => {
+            setIntegrationsTab('agents');
+            setIntegrationsOpen(true);
+          }}
+          onOpenGuidedSetup={() => openGuidedSetup('agent')}
+          onFocusAgents={() => setLayoutMode('agent-preview')}
+          onFocusPreview={() => setLayoutMode('preview-only')}
+          githubConnected={githubConfig.connected}
+        />
+
+        {/* Main Tablet Workspace Grid */}
+        <main className="flex-1 min-w-0 min-h-0 overflow-hidden">
         {layoutMode === 'split-3' && (
-          <div className="grid grid-cols-12 h-full overflow-hidden">
-            <div className="col-span-4 lg:col-span-3 h-full overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 h-full overflow-hidden">
+            <div className="md:col-span-1 lg:col-span-4 xl:col-span-3 h-full min-h-0 overflow-hidden border-b md:border-b-0 border-slate-800/80">
               <AgentStudioPanel
                 messages={messages}
                 agentConfig={agentConfig}
@@ -484,7 +566,7 @@ export function App() {
               />
             </div>
 
-            <div className="col-span-4 lg:col-span-5 h-full overflow-hidden">
+            <div className="md:col-span-1 lg:col-span-4 xl:col-span-5 h-full min-h-0 overflow-hidden border-b lg:border-b-0 border-slate-800/80">
               <TouchCodeEditor
                 files={activeProject.files}
                 activeFilePath={activeFilePath}
@@ -495,7 +577,7 @@ export function App() {
               />
             </div>
 
-            <div className="col-span-4 lg:col-span-4 h-full overflow-hidden">
+            <div className="md:col-span-2 lg:col-span-4 xl:col-span-4 h-full min-h-0 overflow-hidden">
               <LivePwaPreview
                 files={activeProject.files}
                 manifestConfig={activeProject.manifestConfig}
@@ -505,8 +587,8 @@ export function App() {
         )}
 
         {layoutMode === 'code-preview' && (
-          <div className="grid grid-cols-12 h-full overflow-hidden">
-            <div className="col-span-6 h-full overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-12 h-full overflow-hidden">
+            <div className="md:col-span-6 h-full min-h-0 overflow-hidden">
               <TouchCodeEditor
                 files={activeProject.files}
                 activeFilePath={activeFilePath}
@@ -516,7 +598,7 @@ export function App() {
                 onAskAgentAboutFile={handleAskAgentAboutFile}
               />
             </div>
-            <div className="col-span-6 h-full overflow-hidden">
+            <div className="md:col-span-6 h-full min-h-0 overflow-hidden">
               <LivePwaPreview
                 files={activeProject.files}
                 manifestConfig={activeProject.manifestConfig}
@@ -526,8 +608,8 @@ export function App() {
         )}
 
         {layoutMode === 'agent-preview' && (
-          <div className="grid grid-cols-12 h-full overflow-hidden">
-            <div className="col-span-5 h-full overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-12 h-full overflow-hidden">
+            <div className="md:col-span-5 h-full min-h-0 overflow-hidden">
               <AgentStudioPanel
                 messages={messages}
                 agentConfig={agentConfig}
@@ -549,7 +631,7 @@ export function App() {
                 onOpenGuidedSetup={() => openGuidedSetup('agent')}
               />
             </div>
-            <div className="col-span-7 h-full overflow-hidden">
+            <div className="md:col-span-7 h-full min-h-0 overflow-hidden">
               <LivePwaPreview
                 files={activeProject.files}
                 manifestConfig={activeProject.manifestConfig}
@@ -566,7 +648,26 @@ export function App() {
             />
           </div>
         )}
-      </main>
+        </main>
+      </div>
+
+      {/* VS Code Bottom Status Bar */}
+      <VsCodeStatusBar
+        githubConfig={githubConfig}
+        activeFile={activeFile}
+        activeAgent={agentConfig.activeAgent}
+        pwaScore={pwaAudit.score}
+        bridgeConnected={agentConfig.bridgeConnected}
+        onOpenGitHub={() => {
+          setIntegrationsTab('github');
+          setIntegrationsOpen(true);
+        }}
+        onOpenPwaStudio={() => setPwaStudioOpen(true)}
+        onOpenAgents={() => {
+          setIntegrationsTab('agents');
+          setIntegrationsOpen(true);
+        }}
+      />
 
       {/* PWA Manifest, Service Worker & Readiness Audit Studio */}
       <PwaBuilderModal
@@ -593,22 +694,7 @@ export function App() {
         agentConfig={agentConfig}
         onUpdateAgentConfig={setAgentConfig}
         activeProject={activeProject}
-        onReplaceProjectFiles={(files, notice) => {
-          updateActiveProjectFiles(files);
-          if (notice) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `sys-${Date.now()}`,
-                role: 'assistant',
-                agent: agentConfig.activeAgent,
-                agentLabel: 'Cloud Sync',
-                content: `✅ ${notice}`,
-                timestamp: new Date().toLocaleTimeString()
-              }
-            ]);
-          }
-        }}
+        onReplaceProjectFiles={handleReplaceProjectFiles}
         onTestBridge={checkBridgeHealth}
         bridgeToolsStatus={bridgeToolsStatus}
         onOpenGuidedSetup={(step) => openGuidedSetup(step)}
@@ -624,22 +710,7 @@ export function App() {
         githubConfig={githubConfig}
         onUpdateGitHub={setGithubConfig}
         activeProject={activeProject}
-        onReplaceProjectFiles={(files, notice) => {
-          updateActiveProjectFiles(files);
-          if (notice) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `sys-${Date.now()}`,
-                role: 'assistant',
-                agent: agentConfig.activeAgent,
-                agentLabel: 'Cloud Sync',
-                content: `✅ ${notice}`,
-                timestamp: new Date().toLocaleTimeString()
-              }
-            ]);
-          }
-        }}
+        onReplaceProjectFiles={handleReplaceProjectFiles}
         onTestBridge={checkBridgeHealth}
         bridgeToolsStatus={bridgeToolsStatus}
       />

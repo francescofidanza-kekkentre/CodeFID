@@ -3,10 +3,21 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 
-// Register CodeFID's own PWA Service Worker for tablet installation
+// Purge any leftover Cache Storage so the UI is always loaded live from GitHub Pages
+if ('caches' in window) {
+  caches
+    .keys()
+    .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+    .catch(() => {});
+}
+
+// Register no-cache Service Worker without HTTP cache for sw.js itself
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker
+      .register('./sw.js', { updateViaCache: 'none' })
+      .then((registration) => registration.update())
+      .catch(() => {});
   });
 }
 

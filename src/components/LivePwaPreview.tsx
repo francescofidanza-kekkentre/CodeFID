@@ -91,9 +91,9 @@ export const LivePwaPreview: React.FC<LivePwaPreviewProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#070b14] overflow-hidden">
+    <div className="flex flex-col h-full bg-[#1e1e1e] overflow-hidden">
       {/* Simulator Toolbar */}
-      <div className="h-11 px-3 bg-[#0e1526] border-b border-slate-800/80 flex items-center justify-between gap-2 shrink-0 overflow-x-auto">
+      <div className="h-10 px-3 bg-[#252526] border-b border-[#2b2b2b] flex items-center justify-between gap-2 shrink-0 overflow-x-auto no-scrollbar">
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setDevice('ipad-pro')}
@@ -281,11 +281,11 @@ export const LivePwaPreview: React.FC<LivePwaPreviewProps> = ({
 
           {/* Live Sandboxed Iframe or Empty State */}
           {files.length === 0 ? (
-            <div className="flex-1 bg-slate-950 flex flex-col items-center justify-center p-6 text-center text-slate-500">
-              <Tablet className="w-10 h-10 text-slate-800 mb-3" />
-              <p className="text-sm font-medium text-slate-400">Anteprima vuota</p>
-              <p className="text-xs text-slate-600 mt-1 max-w-xs">
-                Crea <code className="text-slate-500">index.html</code> o genera un progetto con l&apos;AI per vedere l&apos;anteprima live.
+            <div className="flex-1 bg-[#1e1e1e] flex flex-col items-center justify-center p-6 text-center text-[#858585]">
+              <Tablet className="w-10 h-10 text-[#3c3c3c] mb-3" />
+              <p className="text-sm font-medium text-[#cccccc]">Anteprima vuota</p>
+              <p className="text-xs text-[#858585] mt-1 max-w-xs">
+                Crea <code className="text-[#cccccc]">index.html</code> o genera un progetto con l&apos;AI per vedere l&apos;anteprima live.
               </p>
             </div>
           ) : (

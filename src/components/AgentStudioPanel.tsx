@@ -79,19 +79,19 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0c1221] border-r border-slate-800/80 overflow-hidden">
+    <div className="flex flex-col h-full bg-[#181818] border-r border-[#2b2b2b] overflow-hidden">
       {/* Header: Active Agent Selector */}
-      <div className="p-2.5 bg-[#0f172a] border-b border-slate-800/80 flex flex-col gap-2 shrink-0">
+      <div className="p-2.5 bg-[#252526] border-b border-[#2b2b2b] flex flex-col gap-2 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Bot className="w-4 h-4 text-indigo-400" />
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
-              AI Agent Studio
+            <Bot className="w-4 h-4 text-[#3794ff]" />
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#cccccc]">
+              AI Agent Chat
             </span>
           </div>
           <button
             onClick={onOpenSettings}
-            className="text-[11px] text-indigo-300 hover:text-indigo-200 underline"
+            className="text-[11px] text-[#3794ff] hover:underline"
           >
             {agentConfig.claudeApiKey || agentConfig.geminiApiKey
               ? 'API Cloud Attiva'
@@ -258,13 +258,13 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
       </div>
 
       {/* Quick Slash Prompts Bar */}
-      <div className="px-2.5 py-1.5 bg-[#0f172a] border-t border-slate-800/80 flex items-center gap-1.5 overflow-x-auto shrink-0">
+      <div className="px-2.5 py-1.5 bg-[#252526] border-t border-[#2b2b2b] flex items-center gap-1.5 overflow-x-auto shrink-0">
         {QUICK_PROMPTS.map((q) => (
           <button
             key={q.label}
             onClick={() => onSendPrompt(q.prompt)}
             disabled={isRunning}
-            className="px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-indigo-600/25 border border-slate-700/80 text-slate-300 hover:text-indigo-200 text-[11px] font-medium whitespace-nowrap transition shrink-0"
+            className="px-2.5 py-1 rounded bg-[#333333] hover:bg-[#007acc]/30 border border-[#3c3c3c] text-[#cccccc] hover:text-white text-[11px] font-medium whitespace-nowrap transition shrink-0"
           >
             {q.label}
           </button>
@@ -274,7 +274,7 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
       {/* Prompt Input Form */}
       <form
         onSubmit={handleSubmit}
-        className="p-2.5 bg-[#090d18] border-t border-slate-800/80 flex items-center gap-2 shrink-0"
+        className="p-2.5 bg-[#181818] border-t border-[#2b2b2b] flex items-center gap-2 shrink-0"
       >
         <div className="relative flex-1">
           <input
@@ -282,14 +282,14 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Chiedi a Claude/Antigravity (o usa !cmd per Bridge CLI)..."
-            className="w-full bg-slate-900 text-slate-100 text-xs rounded-xl pl-3 pr-9 py-2.5 border border-slate-700/80 focus:outline-none focus:border-indigo-500"
+            className="w-full bg-[#252526] text-[#cccccc] text-xs lg:text-[13px] rounded pl-3 pr-9 py-2.5 min-h-[42px] border border-[#3c3c3c] focus:outline-none focus:border-[#007acc]"
           />
-          <Terminal className="w-3.5 h-3.5 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Terminal className="w-3.5 h-3.5 text-[#858585] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
         <button
           type="submit"
           disabled={isRunning || !input.trim()}
-          className="px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-semibold text-xs flex items-center gap-1.5 transition shrink-0"
+          className="px-4 py-2.5 min-h-[42px] rounded bg-[#007acc] hover:bg-[#1f8ad2] disabled:opacity-40 text-white font-medium text-xs flex items-center gap-1.5 transition shrink-0"
         >
           <Send className="w-3.5 h-3.5" />
           <span>Invia</span>
