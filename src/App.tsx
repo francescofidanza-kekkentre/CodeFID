@@ -25,6 +25,7 @@ import { IntegrationsDrawer } from './components/IntegrationsDrawer';
 import { GuidedSetupModal, GuidedStep } from './components/GuidedSetupModal';
 import { VsCodeActivityBar } from './components/VsCodeActivityBar';
 import { VsCodeStatusBar } from './components/VsCodeStatusBar';
+import { VsCodeTerminalPanel } from './components/VsCodeTerminalPanel';
 
 const STORAGE_KEYS = {
   PROJECTS: 'codefid_projects_v1',
@@ -140,6 +141,7 @@ export function App() {
   const [explorerOpen, setExplorerOpen] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 1280 : false
   );
+  const [terminalOpen, setTerminalOpen] = useState(false);
   const [integrationsTab, setIntegrationsTab] = useState<
     'github' | 'firebase' | 'agents'
   >('github');
@@ -265,6 +267,11 @@ export function App() {
     ];
     updateActiveProjectFiles(nextFiles);
     setActiveFilePath(path);
+  };
+
+  const handleDeleteFile = (path: string) => {
+    const nextFiles = activeProject.files.filter((f) => f.path !== path);
+    updateActiveProjectFiles(nextFiles);
   };
 
   const handleUpdateManifestConfig = (nextManifestConfig: PwaManifestConfig) => {
@@ -539,11 +546,15 @@ export function App() {
           onOpenGuidedSetup={() => openGuidedSetup('agent')}
           onFocusAgents={() => setLayoutMode('agent-preview')}
           onFocusPreview={() => setLayoutMode('preview-only')}
+          terminalOpen={terminalOpen}
+          onToggleTerminal={() => setTerminalOpen((prev) => !prev)}
           githubConnected={githubConfig.connected}
         />
 
-        {/* Main Tablet Workspace Grid */}
-        <main className="flex-1 min-w-0 min-h-0 overflow-hidden">
+        {/* Right Column: Workspace + Collapsible Bottom Terminal */}
+        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
+          {/* Main Tablet Workspace Grid */}
+          <main className="flex-1 min-w-0 min-h-0 overflow-hidden">
         {layoutMode === 'split-3' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 h-full overflow-hidden">
             <div className="md:col-span-1 lg:col-span-4 xl:col-span-3 h-full min-h-0 overflow-hidden border-b md:border-b-0 border-slate-800/80">
@@ -648,7 +659,20 @@ export function App() {
             />
           </div>
         )}
-        </main>
+          </main>
+
+          <VsCodeTerminalPanel
+            isOpen={terminalOpen}
+            onClose={() => setTerminalOpen(false)}
+            projectId={activeProject.id}
+            projectName={activeProject.name}
+            files={activeProject.files}
+            agentConfig={agentConfig}
+            githubConfig={githubConfig}
+            onCreateFile={handleCreateFile}
+            onDeleteFile={handleDeleteFile}
+          />
+        </div>
       </div>
 
       {/* VS Code Bottom Status Bar */}
@@ -658,6 +682,8 @@ export function App() {
         activeAgent={agentConfig.activeAgent}
         pwaScore={pwaAudit.score}
         bridgeConnected={agentConfig.bridgeConnected}
+        terminalOpen={terminalOpen}
+        onToggleTerminal={() => setTerminalOpen((prev) => !prev)}
         onOpenGitHub={() => {
           setIntegrationsTab('github');
           setIntegrationsOpen(true);

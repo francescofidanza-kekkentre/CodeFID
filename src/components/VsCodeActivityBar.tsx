@@ -12,6 +12,7 @@ import {
   Settings,
   ShieldCheck,
   Tablet,
+  TerminalSquare,
   Wand2
 } from 'lucide-react';
 import { ProjectFile } from '../types/ide';
@@ -31,6 +32,8 @@ interface VsCodeActivityBarProps {
   onOpenGuidedSetup: () => void;
   onFocusAgents: () => void;
   onFocusPreview: () => void;
+  terminalOpen: boolean;
+  onToggleTerminal: () => void;
   githubConnected: boolean;
 }
 
@@ -60,6 +63,8 @@ export const VsCodeActivityBar: React.FC<VsCodeActivityBarProps> = ({
   onOpenGuidedSetup,
   onFocusAgents,
   onFocusPreview,
+  terminalOpen,
+  onToggleTerminal,
   githubConnected
 }) => {
   const handleNewFilePrompt = () => {
@@ -129,6 +134,18 @@ export const VsCodeActivityBar: React.FC<VsCodeActivityBarProps> = ({
             className="w-full h-11 flex items-center justify-center text-[#858585] hover:text-white border-l-2 border-transparent transition"
           >
             <ShieldCheck className="w-5 h-5" />
+          </button>
+
+          <button
+            onClick={onToggleTerminal}
+            title="Terminale Integrato"
+            className={`w-full h-11 flex items-center justify-center relative transition ${
+              terminalOpen
+                ? 'text-white border-l-2 border-[#007acc]'
+                : 'text-[#858585] hover:text-white border-l-2 border-transparent'
+            }`}
+          >
+            <TerminalSquare className="w-5 h-5" />
           </button>
         </div>
 

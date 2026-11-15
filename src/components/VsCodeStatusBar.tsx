@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot, GitBranch, ShieldCheck } from 'lucide-react';
+import { Bot, GitBranch, ShieldCheck, TerminalSquare } from 'lucide-react';
 import { AgentId, GitHubConfig, ProjectFile } from '../types/ide';
 
 interface VsCodeStatusBarProps {
@@ -8,6 +8,8 @@ interface VsCodeStatusBarProps {
   activeAgent: AgentId;
   pwaScore: number;
   bridgeConnected: boolean;
+  terminalOpen: boolean;
+  onToggleTerminal: () => void;
   onOpenGitHub: () => void;
   onOpenPwaStudio: () => void;
   onOpenAgents: () => void;
@@ -23,6 +25,8 @@ export const VsCodeStatusBar: React.FC<VsCodeStatusBarProps> = ({
   activeAgent,
   pwaScore,
   bridgeConnected,
+  terminalOpen,
+  onToggleTerminal,
   onOpenGitHub,
   onOpenPwaStudio,
   onOpenAgents
@@ -53,6 +57,17 @@ export const VsCodeStatusBar: React.FC<VsCodeStatusBarProps> = ({
         >
           <ShieldCheck className="w-3.5 h-3.5" />
           <span>PWA {pwaScore}%</span>
+        </button>
+
+        <button
+          onClick={onToggleTerminal}
+          className={`flex items-center gap-1 px-2 h-6 transition ${
+            terminalOpen ? 'bg-white/20 font-semibold' : 'hover:bg-white/15'
+          }`}
+          title="Apri / Chiudi Terminale"
+        >
+          <TerminalSquare className="w-3.5 h-3.5" />
+          <span>Terminale</span>
         </button>
       </div>
 
