@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ChevronDown,
   Code2,
@@ -8,6 +8,8 @@ import {
   FolderKanban,
   GitBranch,
   Columns3,
+  Maximize2,
+  Minimize2,
   Smartphone,
   Sparkles,
   ShieldCheck,
@@ -58,6 +60,48 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
   onExportProject,
   onOpenGuidedSetup
 }) => {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const syncFullscreen = () => {
+      const doc = document as Document & { webkitFullscreenElement?: Element | null };
+      setIsFullscreen(Boolean(doc.fullscreenElement || doc.webkitFullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    document.addEventListener('webkitfullscreenchange', syncFullscreen);
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreen);
+      document.removeEventListener('webkitfullscreenchange', syncFullscreen);
+    };
+  }, []);
+
+  const handleToggleFullscreen = async () => {
+    const doc = document as Document & {
+      webkitFullscreenElement?: Element | null;
+      webkitExitFullscreen?: () => Promise<void>;
+    };
+    const root = document.documentElement as HTMLElement & {
+      webkitRequestFullscreen?: () => Promise<void>;
+    };
+    try {
+      if (doc.fullscreenElement || doc.webkitFullscreenElement) {
+        if (doc.exitFullscreen) {
+          await doc.exitFullscreen();
+        } else if (doc.webkitExitFullscreen) {
+          await doc.webkitExitFullscreen();
+        }
+      } else {
+        if (root.requestFullscreen) {
+          await root.requestFullscreen({ navigationUI: 'hide' });
+        } else if (root.webkitRequestFullscreen) {
+          await root.webkitRequestFullscreen();
+        }
+      }
+    } catch {
+      // Ignore if fullscreen is blocked by the browser
+    }
+  };
+
   return (
     <header className="min-h-[48px] bg-[#181818] border-b border-[#2b2b2b] px-2.5 lg:px-3 py-1 flex items-center justify-between gap-2 select-none shrink-0 z-20 overflow-x-auto no-scrollbar">
       {/* Left: Brand & Project Selector */}
@@ -259,6 +303,23 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
         >
           <Wand2 className="w-3.5 h-3.5" />
           <span className="hidden lg:inline">Setup Guidato</span>
+        </button>
+
+        {/* Android / Tablet Fullscreen Toggle */}
+        <button
+          onClick={handleToggleFullscreen}
+          className={`p-2 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-md border transition ${
+            isFullscreen
+              ? 'bg-[#007acc] border-[#007acc] text-white'
+              : 'bg-[#252526] hover:bg-[#2a2d2e] border-[#3c3c3c] text-[#cccccc]'
+          }`}
+          title={isFullscreen ? 'Esci da Tutto Schermo' : 'Modalità Tutto Schermo (Android)'}
+        >
+          {isFullscreen ? (
+            <Minimize2 className="w-3.5 h-3.5" />
+          ) : (
+            <Maximize2 className="w-3.5 h-3.5" />
+          )}
         </button>
 
         {/* Export JSON Bundle */}
