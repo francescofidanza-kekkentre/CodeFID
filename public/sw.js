@@ -1,5 +1,13 @@
-const CACHE_NAME = 'codefid-tablet-ide-v1';
-const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon.svg'];
+const CACHE_NAME = 'visualfidcodingapp-v2';
+const ASSETS = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './apple-touch-icon.png',
+  './icon-192.png',
+  './icon-512.png',
+  './icon.svg'
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

@@ -124,10 +124,10 @@ export function App() {
       id: 'welcome-msg',
       role: 'assistant',
       agent: 'antigravity',
-      agentLabel: 'CodeFID Multi-Agent Orchestrator',
+      agentLabel: 'VisualFidCodingApp Orchestrator',
       timestamp: new Date().toLocaleTimeString(),
       content:
-        'Benvenuto in **CodeFID Tablet PWA Studio**!\n\n' +
+        'Benvenuto in **VisualFidCodingApp**!\n\n' +
         '• Usa **Antigravity** per architettura PWA, Service Worker offline, Firebase e GitHub Actions.\n' +
         '• Usa **Claude** per rifinire interfaccia touch, CSS e componenti interattivi.\n' +
         '• Usa **Swarm** per far collaborare Antigravity + Claude contemporaneamente sui file del progetto.\n\n' +

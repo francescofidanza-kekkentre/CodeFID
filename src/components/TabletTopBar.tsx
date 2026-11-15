@@ -59,14 +59,18 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
       {/* Left: Brand & Project Selector */}
       <div className="flex items-center gap-2.5">
         <div className="flex items-center gap-2 bg-gradient-to-r from-indigo-600/20 to-sky-500/10 border border-indigo-500/30 px-2.5 py-1.5 rounded-xl">
-          <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center shadow-md shadow-indigo-600/30">
-            <Code2 className="w-4 h-4 text-white" />
-          </div>
+          <img
+            src="./icon-192.png"
+            alt="VisualFidCodingApp"
+            className="w-7 h-7 rounded-lg shadow-md shadow-indigo-600/30"
+          />
           <div className="leading-tight">
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-sm tracking-tight text-white">CodeFID</span>
+              <span className="font-bold text-sm tracking-tight text-white">
+                VisualFidCodingApp
+              </span>
               <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                Tablet PWA IDE
+                Tablet PWA
               </span>
             </div>
           </div>
