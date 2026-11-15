@@ -1,8 +1,6 @@
 import React, { useRef, useState } from 'react';
 import {
   FileCode2,
-  FileJson,
-  FileText,
   Plus,
   Sparkles,
   Cpu,
@@ -11,6 +9,7 @@ import {
   Copy
 } from 'lucide-react';
 import { ProjectFile } from '../types/ide';
+import { renderFileIcon } from '../utils/fileHelpers';
 
 interface TouchCodeEditorProps {
   files: ProjectFile[];
@@ -104,13 +103,6 @@ export const TouchCodeEditor: React.FC<TouchCodeEditorProps> = ({
     onCreateFile(name.trim());
   };
 
-  const getFileIcon = (path: string) => {
-    if (path.endsWith('.json')) return <FileJson className="w-3.5 h-3.5 text-amber-400" />;
-    if (path.endsWith('.html')) return <FileCode2 className="w-3.5 h-3.5 text-orange-400" />;
-    if (path.endsWith('.css')) return <FileCode2 className="w-3.5 h-3.5 text-sky-400" />;
-    return <FileText className="w-3.5 h-3.5 text-indigo-400" />;
-  };
-
   return (
     <div className="flex flex-col h-full bg-[#1e1e1e] border-r border-[#2b2b2b] overflow-hidden">
       {/* File Tabs Bar (VS Code style, Touch Scrollable) */}
@@ -128,7 +120,7 @@ export const TouchCodeEditor: React.FC<TouchCodeEditorProps> = ({
                     : 'bg-[#2d2d2d] text-[#969696] hover:bg-[#2a2d2e] hover:text-[#cccccc] border-t-2 border-t-transparent'
                 }`}
               >
-                {getFileIcon(file.path)}
+                {renderFileIcon(file.path)}
                 <span>{file.path}</span>
                 {file.modified && (
                   <span className="w-1.5 h-1.5 rounded-full bg-[#e2c08d]" title="Modificato" />

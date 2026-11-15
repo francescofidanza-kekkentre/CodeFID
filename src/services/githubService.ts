@@ -1,4 +1,5 @@
 import { ProjectFile } from '../types/ide';
+import { detectFileLanguage } from '../utils/fileHelpers';
 
 const GH_API = 'https://api.github.com';
 
@@ -171,19 +172,7 @@ export async function pullRepoFilesFromGitHub(params: {
     if (!fileRes.ok) continue;
     const fileData = await fileRes.json();
     if (!fileData.content) continue;
-    const ext = blob.path.split('.').pop()?.toLowerCase() || 'javascript';
-    const language: ProjectFile['language'] =
-      ext === 'html'
-        ? 'html'
-        : ext === 'css'
-        ? 'css'
-        : ext === 'json'
-        ? 'json'
-        : ext === 'md'
-        ? 'markdown'
-        : ext === 'yml' || ext === 'yaml'
-        ? 'yaml'
-        : 'javascript';
+    const language = detectFileLanguage(blob.path);
 
     loadedFiles.push({
       path: blob.path,

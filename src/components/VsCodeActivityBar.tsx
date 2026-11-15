@@ -2,10 +2,7 @@ import React from 'react';
 import {
   Bot,
   ChevronDown,
-  FileCode2,
-  FileJson,
   Files,
-  FileText,
   Flame,
   GitBranch,
   Plus,
@@ -16,6 +13,7 @@ import {
   Wand2
 } from 'lucide-react';
 import { ProjectFile } from '../types/ide';
+import { renderFileIcon } from '../utils/fileHelpers';
 
 interface VsCodeActivityBarProps {
   explorerOpen: boolean;
@@ -35,13 +33,6 @@ interface VsCodeActivityBarProps {
   terminalOpen: boolean;
   onToggleTerminal: () => void;
   githubConnected: boolean;
-}
-
-function getFileIcon(path: string) {
-  if (path.endsWith('.json')) return <FileJson className="w-3.5 h-3.5 text-amber-400 shrink-0" />;
-  if (path.endsWith('.html')) return <FileCode2 className="w-3.5 h-3.5 text-orange-400 shrink-0" />;
-  if (path.endsWith('.css')) return <FileCode2 className="w-3.5 h-3.5 text-sky-400 shrink-0" />;
-  return <FileText className="w-3.5 h-3.5 text-[#519aba] shrink-0" />;
 }
 
 /**
@@ -214,7 +205,7 @@ export const VsCodeActivityBar: React.FC<VsCodeActivityBarProps> = ({
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      {getFileIcon(file.path)}
+                      {renderFileIcon(file.path)}
                       <span className="truncate">{file.path}</span>
                     </div>
                     {file.modified && (

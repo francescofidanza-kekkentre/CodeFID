@@ -16,6 +16,12 @@ import {
   generateServiceWorkerJs
 } from './services/pwaPreview';
 import { runAgentTask } from './services/agentEngine';
+import {
+  detectFileLanguage,
+  execBridgeCommand,
+  loadStoredJson,
+  saveStoredJson
+} from './utils/fileHelpers';
 import { TabletTopBar } from './components/TabletTopBar';
 import { TouchCodeEditor } from './components/TouchCodeEditor';
 import { AgentStudioPanel } from './components/AgentStudioPanel';
@@ -60,14 +66,8 @@ function createEmptyProject(): PwaProject {
 export function App() {
   // Projects State
   const [projects, setProjects] = useState<PwaProject[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.PROJECTS);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return [createEmptyProject()];
+    const saved = loadStoredJson<PwaProject[] | null>(STORAGE_KEYS.PROJECTS, null);
+    return Array.isArray(saved) && saved.length > 0 ? saved : [createEmptyProject()];
   });
 
   const [activeProjectId, setActiveProjectId] = useState<string>(() => {
@@ -85,12 +85,8 @@ export function App() {
   const [layoutMode, setLayoutMode] = useState<TabletLayoutMode>('split-3');
 
   // Agent Config
-  const [agentConfig, setAgentConfig] = useState<AgentConfig>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.AGENT_CFG);
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return {
+  const [agentConfig, setAgentConfig] = useState<AgentConfig>(() =>
+    loadStoredJson<AgentConfig>(STORAGE_KEYS.AGENT_CFG, {
       activeAgent: 'antigravity',
       claudeApiKey: '',
       claudeModel: 'claude-3-7-sonnet-latest',
@@ -99,39 +95,31 @@ export function App() {
       bridgeUrl: 'http://localhost:8787',
       bridgeConnected: false,
       autoApplyChanges: true
-    };
-  });
+    })
+  );
 
   // GitHub Config
-  const [githubConfig, setGithubConfig] = useState<GitHubConfig>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.GITHUB_CFG);
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return {
+  const [githubConfig, setGithubConfig] = useState<GitHubConfig>(() =>
+    loadStoredJson<GitHubConfig>(STORAGE_KEYS.GITHUB_CFG, {
       token: '',
       username: '',
       selectedRepo: '',
       branch: 'main',
       connected: false
-    };
-  });
+    })
+  );
 
   // Firebase Config
-  const [firebaseConfig, setFirebaseConfig] = useState<FirebaseConfig>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.FIREBASE_CFG);
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return {
+  const [firebaseConfig, setFirebaseConfig] = useState<FirebaseConfig>(() =>
+    loadStoredJson<FirebaseConfig>(STORAGE_KEYS.FIREBASE_CFG, {
       projectId: '',
       apiKey: '',
       appId: '',
       authDomain: '',
       storageBucket: '',
       connected: false
-    };
-  });
+    })
+  );
 
   // Modals & Drawers
   const [pwaStudioOpen, setPwaStudioOpen] = useState(false);
@@ -156,9 +144,7 @@ export function App() {
 
   // Save states to localStorage
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
-    } catch {}
+    saveStoredJson(STORAGE_KEYS.PROJECTS, projects);
   }, [projects]);
 
   useEffect(() => {
@@ -168,24 +154,15 @@ export function App() {
   }, [activeProjectId]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.AGENT_CFG, JSON.stringify(agentConfig));
-    } catch {}
+    saveStoredJson(STORAGE_KEYS.AGENT_CFG, agentConfig);
   }, [agentConfig]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.GITHUB_CFG, JSON.stringify(githubConfig));
-    } catch {}
+    saveStoredJson(STORAGE_KEYS.GITHUB_CFG, githubConfig);
   }, [githubConfig]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(
-        STORAGE_KEYS.FIREBASE_CFG,
-        JSON.stringify(firebaseConfig)
-      );
-    } catch {}
+    saveStoredJson(STORAGE_KEYS.FIREBASE_CFG, firebaseConfig);
   }, [firebaseConfig]);
 
   // Auto-detect local CLI bridge on mount
@@ -242,19 +219,7 @@ export function App() {
       setActiveFilePath(path);
       return;
     }
-    const ext = path.split('.').pop()?.toLowerCase() || 'js';
-    const language: ProjectFile['language'] =
-      ext === 'html'
-        ? 'html'
-        : ext === 'css'
-        ? 'css'
-        : ext === 'json'
-        ? 'json'
-        : ext === 'md'
-        ? 'markdown'
-        : ext === 'yml' || ext === 'yaml'
-        ? 'yaml'
-        : 'javascript';
+    const language = detectFileLanguage(path);
 
     const nextFiles: ProjectFile[] = [
       ...activeProject.files,
@@ -368,13 +333,7 @@ export function App() {
     setIsAgentRunning(true);
 
     try {
-      const res = await fetch(`${agentConfig.bridgeUrl.replace(/\/$/, '')}/api/exec`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: cmd })
-      });
-      const data = await res.json();
-      const output = (data.stdout || '') + (data.stderr ? `\n${data.stderr}` : '');
+      const data = await execBridgeCommand(agentConfig.bridgeUrl, cmd);
       setMessages((prev) => [
         ...prev,
         {
@@ -382,7 +341,7 @@ export function App() {
           role: 'assistant',
           agent: agentConfig.activeAgent,
           agentLabel: 'CodeFID CLI Bridge',
-          content: output.trim() || '(Comando eseguito senza output)',
+          content: data.output || '(Comando eseguito senza output)',
           timestamp: new Date().toLocaleTimeString(),
           toolCalls: [
             {

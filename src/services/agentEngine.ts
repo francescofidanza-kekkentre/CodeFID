@@ -7,6 +7,7 @@ import {
   PwaManifestConfig
 } from '../types/ide';
 import { auditPwaProject, generateManifestJson, generateServiceWorkerJs } from './pwaPreview';
+import { detectFileLanguage } from '../utils/fileHelpers';
 
 export interface AgentExecutionResult {
   replyText: string;
@@ -62,17 +63,7 @@ function parseJsonPatch(
     for (const patch of parsed.files) {
       if (!patch.path || typeof patch.content !== 'string') continue;
       const idx = nextFiles.findIndex((f) => f.path === patch.path);
-      const ext = patch.path.split('.').pop() || 'javascript';
-      const lang =
-        ext === 'html'
-          ? 'html'
-          : ext === 'css'
-          ? 'css'
-          : ext === 'json'
-          ? 'json'
-          : ext === 'yml' || ext === 'yaml'
-          ? 'yaml'
-          : 'javascript';
+      const lang = detectFileLanguage(patch.path);
 
       if (idx >= 0) {
         nextFiles[idx] = {

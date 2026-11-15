@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Loader2, Terminal, Trash2, X } from 'lucide-react';
 import { AgentConfig, GitHubConfig, ProjectFile } from '../types/ide';
 import { auditPwaProject } from '../services/pwaPreview';
+import { execBridgeCommand } from '../utils/fileHelpers';
 
 interface TerminalLine {
   id: string;
@@ -203,17 +204,11 @@ export const VsCodeTerminalPanel: React.FC<VsCodeTerminalPanelProps> = ({
     // Forward any other shell command to CLI Bridge
     setIsRunning(true);
     try {
-      const res = await fetch(`${agentConfig.bridgeUrl.replace(/\/$/, '')}/api/exec`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: cmd })
-      });
-      const data = await res.json();
-      const out = [data.stdout, data.stderr].filter(Boolean).join('\n').trim();
+      const data = await execBridgeCommand(agentConfig.bridgeUrl, cmd);
       appendLines([
         {
           type: data.ok ? 'out' : 'err',
-          text: out || '(comando eseguito senza output)'
+          text: data.output || '(comando eseguito senza output)'
         }
       ]);
     } catch {
