@@ -188,68 +188,93 @@ export const TouchCodeEditor: React.FC<TouchCodeEditorProps> = ({
       </div>
 
       {/* Tablet Quick-Keys Touch Bar */}
-      <div className="flex items-center gap-1 px-2.5 py-1.5 bg-[#11182b] border-b border-slate-800/80 overflow-x-auto shrink-0">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mr-1 shrink-0">
-          Touch Keys
-        </span>
-        {TOUCH_KEYS.map((k) => (
-          <button
-            key={k.label}
-            onClick={() => handleInsertSymbol(k.insert)}
-            className="px-2.5 py-1 rounded-md bg-slate-800/90 hover:bg-indigo-600/30 active:scale-95 border border-slate-700/70 text-slate-200 font-mono text-xs transition shrink-0"
-          >
-            {k.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Code Editor Area */}
-      <div className="relative flex-1 flex overflow-hidden font-mono text-xs leading-6">
-        {/* Line Numbers Gutter */}
-        <div
-          aria-hidden="true"
-          className="w-11 py-3 bg-[#090d18] text-slate-600 text-right pr-2.5 select-none border-r border-slate-800/60 overflow-hidden shrink-0"
-        >
-          {lines.map((_, idx) => (
-            <div key={idx}>{idx + 1}</div>
+      {activeFile && (
+        <div className="flex items-center gap-1 px-2.5 py-1.5 bg-[#11182b] border-b border-slate-800/80 overflow-x-auto shrink-0">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mr-1 shrink-0">
+            Touch Keys
+          </span>
+          {TOUCH_KEYS.map((k) => (
+            <button
+              key={k.label}
+              onClick={() => handleInsertSymbol(k.insert)}
+              className="px-2.5 py-1 rounded-md bg-slate-800/90 hover:bg-indigo-600/30 active:scale-95 border border-slate-700/70 text-slate-200 font-mono text-xs transition shrink-0"
+            >
+              {k.label}
+            </button>
           ))}
         </div>
+      )}
 
-        {/* Editable Textarea */}
-        <textarea
-          ref={textareaRef}
-          value={activeFile?.content || ''}
-          onChange={(e) => activeFile && onUpdateFileContent(activeFile.path, e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Tab') {
-              e.preventDefault();
-              handleInsertSymbol('  ');
-            }
-          }}
-          spellCheck={false}
-          autoCapitalize="off"
-          autoComplete="off"
-          autoCorrect="off"
-          className="flex-1 w-full h-full p-3 bg-[#0b101d] text-slate-100 font-mono text-xs leading-6 resize-none focus:outline-none overflow-auto selection:bg-indigo-500/30"
-          placeholder="Scrivi codice qui o chiedi a Claude / Antigravity..."
-        />
-      </div>
+      {/* Code Editor Area */}
+      {activeFile ? (
+        <div className="relative flex-1 flex overflow-hidden font-mono text-xs leading-6">
+          {/* Line Numbers Gutter */}
+          <div
+            aria-hidden="true"
+            className="w-11 py-3 bg-[#090d18] text-slate-600 text-right pr-2.5 select-none border-r border-slate-800/60 overflow-hidden shrink-0"
+          >
+            {lines.map((_, idx) => (
+              <div key={idx}>{idx + 1}</div>
+            ))}
+          </div>
+
+          {/* Editable Textarea */}
+          <textarea
+            ref={textareaRef}
+            value={activeFile.content}
+            onChange={(e) => onUpdateFileContent(activeFile.path, e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Tab') {
+                e.preventDefault();
+                handleInsertSymbol('  ');
+              }
+            }}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoComplete="off"
+            autoCorrect="off"
+            className="flex-1 w-full h-full p-3 bg-[#0b101d] text-slate-100 font-mono text-xs leading-6 resize-none focus:outline-none overflow-auto selection:bg-indigo-500/30"
+            placeholder="Scrivi codice qui o chiedi a Claude / Antigravity..."
+          />
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-400">
+          <FileCode2 className="w-10 h-10 text-slate-700 mb-3" />
+          <p className="text-sm font-medium text-slate-300">Nessun file aperto</p>
+          <p className="text-xs text-slate-500 mt-1 mb-4 max-w-xs">
+            Ambiente vuoto. Crea un nuovo file o usa l&apos;AI Agent Studio per iniziare.
+          </p>
+          <button
+            onClick={handleNewFilePrompt}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Nuovo File</span>
+          </button>
+        </div>
+      )}
 
       {/* Editor Footer Status */}
       <div className="h-7 px-3 bg-[#090d18] border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400 shrink-0">
-        <div className="flex items-center gap-3">
-          <span>
-            File: <strong className="text-slate-200">{activeFile?.path}</strong>
-          </span>
-          <span>Righe: {lines.length}</span>
-          <span>Caratteri: {activeFile?.content.length || 0}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="uppercase text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
-            {activeFile?.language}
-          </span>
-          <span className="text-emerald-400">● Auto-Saved Local</span>
-        </div>
+        {activeFile ? (
+          <>
+            <div className="flex items-center gap-3">
+              <span>
+                File: <strong className="text-slate-200">{activeFile.path}</strong>
+              </span>
+              <span>Righe: {lines.length}</span>
+              <span>Caratteri: {activeFile.content.length}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="uppercase text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                {activeFile.language}
+              </span>
+              <span className="text-emerald-400">● Auto-Saved Local</span>
+            </div>
+          </>
+        ) : (
+          <span>Ambiente vuoto</span>
+        )}
       </div>
     </div>
   );

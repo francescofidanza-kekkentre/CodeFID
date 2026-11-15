@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Server,
   Sparkles,
+  Wand2,
   X
 } from 'lucide-react';
 import {
@@ -52,6 +53,7 @@ interface IntegrationsDrawerProps {
   onReplaceProjectFiles: (files: ProjectFile[], statusNotice?: string) => void;
   onTestBridge: () => Promise<void>;
   bridgeToolsStatus: Record<string, any> | null;
+  onOpenGuidedSetup?: (step: 'agent' | 'github') => void;
 }
 
 export const IntegrationsDrawer: React.FC<IntegrationsDrawerProps> = ({
@@ -68,7 +70,8 @@ export const IntegrationsDrawer: React.FC<IntegrationsDrawerProps> = ({
   activeProject,
   onReplaceProjectFiles,
   onTestBridge,
-  bridgeToolsStatus
+  bridgeToolsStatus,
+  onOpenGuidedSetup
 }) => {
   const [ghLoading, setGhLoading] = useState(false);
   const [ghStatus, setGhStatus] = useState<string>('');
@@ -305,12 +308,25 @@ export const IntegrationsDrawer: React.FC<IntegrationsDrawerProps> = ({
             </button>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onOpenGuidedSetup && activeTab !== 'firebase' && (
+              <button
+                onClick={() =>
+                  onOpenGuidedSetup(activeTab === 'github' ? 'github' : 'agent')
+                }
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/35 border border-indigo-500/40 text-indigo-200 text-xs font-semibold transition"
+              >
+                <Wand2 className="w-3.5 h-3.5 text-indigo-300" />
+                <span>Modalità Guidata</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Content Body */}

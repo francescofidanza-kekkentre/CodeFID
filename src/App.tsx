@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { STARTER_PROJECTS } from './data/templates';
 import {
   AgentConfig,
   AgentId,
@@ -23,6 +22,7 @@ import { AgentStudioPanel } from './components/AgentStudioPanel';
 import { LivePwaPreview } from './components/LivePwaPreview';
 import { PwaBuilderModal } from './components/PwaBuilderModal';
 import { IntegrationsDrawer } from './components/IntegrationsDrawer';
+import { GuidedSetupModal, GuidedStep } from './components/GuidedSetupModal';
 
 const STORAGE_KEYS = {
   PROJECTS: 'codefid_projects_v1',
@@ -31,6 +31,28 @@ const STORAGE_KEYS = {
   GITHUB_CFG: 'codefid_github_cfg_v1',
   FIREBASE_CFG: 'codefid_firebase_cfg_v1'
 };
+
+function createEmptyProject(): PwaProject {
+  return {
+    id: 'empty-workspace',
+    name: 'Ambiente Vuoto',
+    description: 'Spazio di lavoro vuoto',
+    updatedAt: new Date().toISOString(),
+    manifestConfig: {
+      name: 'Nuova PWA',
+      short_name: 'App',
+      description: '',
+      theme_color: '#6366f1',
+      background_color: '#0f172a',
+      display: 'standalone',
+      orientation: 'any',
+      start_url: '/index.html',
+      cacheStrategy: 'StaleWhileRevalidate',
+      offlineFallback: true
+    },
+    files: []
+  };
+}
 
 export function App() {
   // Projects State
@@ -42,11 +64,11 @@ export function App() {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch {}
-    return STARTER_PROJECTS;
+    return [createEmptyProject()];
   });
 
   const [activeProjectId, setActiveProjectId] = useState<string>(() => {
-    return localStorage.getItem(STORAGE_KEYS.ACTIVE_ID) || STARTER_PROJECTS[0].id;
+    return localStorage.getItem(STORAGE_KEYS.ACTIVE_ID) || 'empty-workspace';
   });
 
   const activeProject = useMemo(
@@ -54,7 +76,9 @@ export function App() {
     [projects, activeProjectId]
   );
 
-  const [activeFilePath, setActiveFilePath] = useState<string>('index.html');
+  const [activeFilePath, setActiveFilePath] = useState<string>(
+    () => activeProject.files[0]?.path || ''
+  );
   const [layoutMode, setLayoutMode] = useState<TabletLayoutMode>('split-3');
 
   // Agent Config
@@ -109,6 +133,8 @@ export function App() {
   // Modals & Drawers
   const [pwaStudioOpen, setPwaStudioOpen] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
+  const [guidedSetupOpen, setGuidedSetupOpen] = useState(false);
+  const [guidedSetupStep, setGuidedSetupStep] = useState<GuidedStep>('agent');
   const [integrationsTab, setIntegrationsTab] = useState<
     'github' | 'firebase' | 'agents'
   >('github');
@@ -119,21 +145,7 @@ export function App() {
 
   // Agent Conversation History
   const [isAgentRunning, setIsAgentRunning] = useState(false);
-  const [messages, setMessages] = useState<AgentMessage[]>([
-    {
-      id: 'welcome-msg',
-      role: 'assistant',
-      agent: 'antigravity',
-      agentLabel: 'VisualFidCodingApp Orchestrator',
-      timestamp: new Date().toLocaleTimeString(),
-      content:
-        'Benvenuto in **VisualFidCodingApp**!\n\n' +
-        '• Usa **Antigravity** per architettura PWA, Service Worker offline, Firebase e GitHub Actions.\n' +
-        '• Usa **Claude** per rifinire interfaccia touch, CSS e componenti interattivi.\n' +
-        '• Usa **Swarm** per far collaborare Antigravity + Claude contemporaneamente sui file del progetto.\n\n' +
-        'Tocca uno dei comandi rapidi qui sotto o scrivi cosa vuoi aggiungere alla tua PWA!'
-    }
-  ]);
+  const [messages, setMessages] = useState<AgentMessage[]>([]);
 
   // Save states to localStorage
   useEffect(() => {
@@ -204,6 +216,11 @@ export function App() {
           : p
       )
     );
+    if (nextFiles.length > 0 && !nextFiles.some((f) => f.path === activeFilePath)) {
+      setActiveFilePath(nextFiles[0].path);
+    } else if (nextFiles.length === 0) {
+      setActiveFilePath('');
+    }
   };
 
   const handleUpdateFileContent = (path: string, newContent: string) => {
@@ -407,6 +424,12 @@ export function App() {
     URL.revokeObjectURL(url);
   };
 
+  const openGuidedSetup = (step: GuidedStep = 'agent') => {
+    setIntegrationsOpen(false);
+    setGuidedSetupStep(step);
+    setGuidedSetupOpen(true);
+  };
+
   return (
     <div className="flex flex-col h-screen w-screen bg-[#090d16] text-slate-100 overflow-hidden">
       {/* Top Bar */}
@@ -415,7 +438,8 @@ export function App() {
         activeProject={activeProject}
         onSelectProject={(id) => {
           setActiveProjectId(id);
-          setActiveFilePath('index.html');
+          const target = projects.find((p) => p.id === id);
+          setActiveFilePath(target?.files[0]?.path || '');
         }}
         layoutMode={layoutMode}
         onChangeLayout={setLayoutMode}
@@ -433,6 +457,7 @@ export function App() {
         firebaseConfig={firebaseConfig}
         bridgeConnected={agentConfig.bridgeConnected}
         onExportProject={handleExportProject}
+        onOpenGuidedSetup={() => openGuidedSetup('agent')}
       />
 
       {/* Main Tablet Workspace Grid */}
@@ -455,6 +480,7 @@ export function App() {
                   setIntegrationsTab('agents');
                   setIntegrationsOpen(true);
                 }}
+                onOpenGuidedSetup={() => openGuidedSetup('agent')}
               />
             </div>
 
@@ -520,6 +546,7 @@ export function App() {
                   setIntegrationsTab('agents');
                   setIntegrationsOpen(true);
                 }}
+                onOpenGuidedSetup={() => openGuidedSetup('agent')}
               />
             </div>
             <div className="col-span-7 h-full overflow-hidden">
@@ -565,6 +592,37 @@ export function App() {
         onUpdateFirebase={setFirebaseConfig}
         agentConfig={agentConfig}
         onUpdateAgentConfig={setAgentConfig}
+        activeProject={activeProject}
+        onReplaceProjectFiles={(files, notice) => {
+          updateActiveProjectFiles(files);
+          if (notice) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `sys-${Date.now()}`,
+                role: 'assistant',
+                agent: agentConfig.activeAgent,
+                agentLabel: 'Cloud Sync',
+                content: `✅ ${notice}`,
+                timestamp: new Date().toLocaleTimeString()
+              }
+            ]);
+          }
+        }}
+        onTestBridge={checkBridgeHealth}
+        bridgeToolsStatus={bridgeToolsStatus}
+        onOpenGuidedSetup={(step) => openGuidedSetup(step)}
+      />
+
+      {/* Guided Setup Wizard for AI Agent & GitHub */}
+      <GuidedSetupModal
+        isOpen={guidedSetupOpen}
+        initialStep={guidedSetupStep}
+        onClose={() => setGuidedSetupOpen(false)}
+        agentConfig={agentConfig}
+        onUpdateAgentConfig={setAgentConfig}
+        githubConfig={githubConfig}
+        onUpdateGitHub={setGithubConfig}
         activeProject={activeProject}
         onReplaceProjectFiles={(files, notice) => {
           updateActiveProjectFiles(files);

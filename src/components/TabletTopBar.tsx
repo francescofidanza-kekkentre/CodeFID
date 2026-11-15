@@ -11,7 +11,8 @@ import {
   Sparkles,
   ShieldCheck,
   SplitSquareVertical,
-  Bot
+  Bot,
+  Wand2
 } from 'lucide-react';
 import {
   AgentId,
@@ -36,6 +37,7 @@ interface TabletTopBarProps {
   firebaseConfig: FirebaseConfig;
   bridgeConnected: boolean;
   onExportProject: () => void;
+  onOpenGuidedSetup: () => void;
 }
 
 export const TabletTopBar: React.FC<TabletTopBarProps> = ({
@@ -52,7 +54,8 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
   githubConfig,
   firebaseConfig,
   bridgeConnected,
-  onExportProject
+  onExportProject,
+  onOpenGuidedSetup
 }) => {
   return (
     <header className="h-14 bg-[#0d1322]/95 border-b border-slate-800/80 px-3 flex items-center justify-between gap-2 select-none shrink-0 z-20">
@@ -244,6 +247,16 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
             }`}
           />
           <span className="hidden lg:inline">API & Bridge</span>
+        </button>
+
+        {/* Guided Setup Wizard */}
+        <button
+          onClick={onOpenGuidedSetup}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/35 border border-indigo-500/40 text-indigo-200 text-xs font-semibold transition"
+          title="Modalità guidata per collegare Agente IA e GitHub"
+        >
+          <Wand2 className="w-3.5 h-3.5 text-indigo-300" />
+          <span className="hidden lg:inline">Setup Guidato</span>
         </button>
 
         {/* Export JSON Bundle */}

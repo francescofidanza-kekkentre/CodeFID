@@ -10,6 +10,7 @@ import {
   Sparkles,
   Terminal,
   Users,
+  Wand2,
   Wrench
 } from 'lucide-react';
 import {
@@ -29,6 +30,7 @@ interface AgentStudioPanelProps {
   onSelectFile: (path: string) => void;
   onRestoreSnapshot: (files: ProjectFile[]) => void;
   onOpenSettings: () => void;
+  onOpenGuidedSetup?: () => void;
 }
 
 const QUICK_PROMPTS = [
@@ -59,7 +61,8 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
   onRunBridgeCommand,
   onSelectFile,
   onRestoreSnapshot,
-  onOpenSettings
+  onOpenSettings,
+  onOpenGuidedSetup
 }) => {
   const [input, setInput] = useState('');
 
@@ -153,6 +156,24 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
 
       {/* Messages Feed */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        {messages.length === 0 && !isRunning && (
+          <div className="h-full flex flex-col items-center justify-center text-center p-4 text-slate-500">
+            <Bot className="w-8 h-8 text-slate-700 mb-2" />
+            <p className="text-xs font-medium text-slate-400">Nessun messaggio</p>
+            <p className="text-[11px] text-slate-600 mt-1 max-w-[220px]">
+              Scrivi un prompt qui sotto o usa un comando rapido per iniziare.
+            </p>
+            {onOpenGuidedSetup && (
+              <button
+                onClick={onOpenGuidedSetup}
+                className="mt-3 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/35 border border-indigo-500/40 text-indigo-200 text-[11px] font-semibold transition"
+              >
+                <Wand2 className="w-3.5 h-3.5 text-indigo-300" />
+                <span>Setup Guidato IA &amp; GitHub</span>
+              </button>
+            )}
+          </div>
+        )}
         {messages.map((msg) => {
           const isUser = msg.role === 'user';
           return (

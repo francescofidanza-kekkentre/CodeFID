@@ -58,7 +58,7 @@ export const LivePwaPreview: React.FC<LivePwaPreviewProps> = ({
   }, []);
 
   const srcDoc = useMemo(
-    () => buildPreviewHtml(files, simulateOffline),
+    () => (files.length === 0 ? '' : buildPreviewHtml(files, simulateOffline)),
     [files, simulateOffline, reloadKey]
   );
 
@@ -279,14 +279,24 @@ export const LivePwaPreview: React.FC<LivePwaPreviewProps> = ({
             </div>
           )}
 
-          {/* Live Sandboxed Iframe */}
-          <iframe
-            key={reloadKey}
-            title="Live Tablet PWA Preview"
-            srcDoc={srcDoc}
-            sandbox="allow-scripts allow-modals allow-forms allow-same-origin"
-            className="w-full flex-1 bg-slate-900 border-0"
-          />
+          {/* Live Sandboxed Iframe or Empty State */}
+          {files.length === 0 ? (
+            <div className="flex-1 bg-slate-950 flex flex-col items-center justify-center p-6 text-center text-slate-500">
+              <Tablet className="w-10 h-10 text-slate-800 mb-3" />
+              <p className="text-sm font-medium text-slate-400">Anteprima vuota</p>
+              <p className="text-xs text-slate-600 mt-1 max-w-xs">
+                Crea <code className="text-slate-500">index.html</code> o genera un progetto con l&apos;AI per vedere l&apos;anteprima live.
+              </p>
+            </div>
+          ) : (
+            <iframe
+              key={reloadKey}
+              title="Live Tablet PWA Preview"
+              srcDoc={srcDoc}
+              sandbox="allow-scripts allow-modals allow-forms allow-same-origin"
+              className="w-full flex-1 bg-slate-900 border-0"
+            />
+          )}
         </div>
       </div>
 
