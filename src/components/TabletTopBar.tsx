@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  ChevronDown,
   Code2,
   Cpu,
   Download,
@@ -80,20 +81,21 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
         </div>
 
         {/* Template / Project Switcher */}
-        <div className="relative flex items-center">
-          <FolderKanban className="w-3.5 h-3.5 text-[#858585] absolute left-2.5 pointer-events-none" />
+        <div className="flex items-center gap-1.5 bg-[#252526] hover:bg-[#2a2d2e] px-2.5 min-h-[36px] rounded-md border border-[#3c3c3c] focus-within:border-[#007acc] transition">
+          <FolderKanban className="w-3.5 h-3.5 text-[#858585] shrink-0 pointer-events-none" />
           <select
             aria-label="Seleziona Progetto PWA"
             value={activeProject.id}
             onChange={(e) => onSelectProject(e.target.value)}
-            className="max-w-[140px] lg:max-w-[190px] truncate bg-[#252526] hover:bg-[#2a2d2e] text-[#cccccc] text-xs font-medium pl-8 pr-6 py-1.5 min-h-[36px] rounded-md border border-[#3c3c3c] focus:outline-none focus:border-[#007acc] transition cursor-pointer"
+            className="max-w-[120px] lg:max-w-[170px] truncate appearance-none bg-transparent text-[#cccccc] text-xs font-medium py-1.5 pr-1 focus:outline-none cursor-pointer"
           >
             {projects.map((p) => (
-              <option key={p.id} value={p.id}>
+              <option key={p.id} value={p.id} className="bg-[#252526] text-[#cccccc]">
                 {p.name}
               </option>
             ))}
           </select>
+          <ChevronDown className="w-3.5 h-3.5 text-[#858585] shrink-0 pointer-events-none" />
         </div>
       </div>
 
