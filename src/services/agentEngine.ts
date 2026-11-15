@@ -209,15 +209,53 @@ export async function runAgentTask(params: {
   const { prompt, agentConfig, files, manifestConfig, firebaseConfig } = params;
   const activeAgent = agentConfig.activeAgent;
 
-  // 1. If user has configured a real API key, use live cloud API
-  if (activeAgent === 'claude' && agentConfig.claudeApiKey.trim()) {
+  const hasClaude = Boolean(agentConfig.claudeApiKey.trim());
+  const hasGemini = Boolean(agentConfig.geminiApiKey.trim());
+
+  // 1. Real Dual-Agent Swarm: Antigravity (Gemini) -> Claude (Anthropic)
+  if (activeAgent === 'swarm') {
+    if (hasGemini && hasClaude) {
+      const agyPrompt = `[Ruolo: Antigravity Architect nello Swarm]\nProgetta la struttura, i file PWA/logica e prepara la base per questa richiesta:\n${prompt}`;
+      const step1 = await callGeminiAntigravityApi(
+        agyPrompt,
+        agentConfig,
+        files,
+        'antigravity'
+      );
+
+      const claudePrompt = `[Ruolo: Claude UI/Frontend Builder nello Swarm]\nAntigravity ha appena lavorato su questa richiesta:\n"${prompt}"\n\nRifinisci UI/UX touch, CSS, layout e codice interattivo sui file risultanti.`;
+      const step2 = await callClaudeApi(
+        claudePrompt,
+        agentConfig,
+        step1.updatedFiles
+      );
+
+      return {
+        replyText:
+          `### 1. Antigravity (${agentConfig.antigravityModel || 'Gemini'})\n${step1.replyText}\n\n---\n\n` +
+          `### 2. Claude (${agentConfig.claudeModel || 'Sonnet'})\n${step2.replyText}`,
+        agentLabel: 'Swarm (Antigravity + Claude)',
+        toolCalls: [...step1.toolCalls, ...step2.toolCalls],
+        updatedFiles: step2.updatedFiles
+      };
+    }
+
+    if (hasGemini) {
+      return callGeminiAntigravityApi(prompt, agentConfig, files, 'swarm');
+    }
+
+    if (hasClaude) {
+      const res = await callClaudeApi(prompt, agentConfig, files);
+      return { ...res, agentLabel: `Swarm (${res.agentLabel})` };
+    }
+  }
+
+  // 2. Single Cloud Agent if user has configured its API key
+  if (activeAgent === 'claude' && hasClaude) {
     return callClaudeApi(prompt, agentConfig, files);
   }
-  if (
-    (activeAgent === 'antigravity' || activeAgent === 'swarm') &&
-    agentConfig.geminiApiKey.trim()
-  ) {
-    return callGeminiAntigravityApi(prompt, agentConfig, files, activeAgent);
+  if (activeAgent === 'antigravity' && hasGemini) {
+    return callGeminiAntigravityApi(prompt, agentConfig, files, 'antigravity');
   }
 
   // 2. Built-in Autonomous Agent Engine (works immediately on tablet without requiring external keys)
