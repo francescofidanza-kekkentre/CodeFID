@@ -479,7 +479,7 @@ export function App() {
   );
 
   return (
-    <div className="flex flex-col h-dvh w-screen bg-[#1e1e1e] text-[#cccccc] overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+    <div className="flex flex-col h-full w-full bg-[#1e1e1e] text-[#cccccc] overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       {/* Top Bar */}
       <TabletTopBar
         projects={projects}

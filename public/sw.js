@@ -1,5 +1,5 @@
-// No-Cache Service Worker: always loads the UI live from GitHub Pages.
-// Only repository code cloned by the user is kept locally in the app workspace.
+// No-Cache Service Worker: purges any legacy caches and lets the browser
+// fetch the UI directly from GitHub Pages without SW interception errors.
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -14,10 +14,6 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
-
-  event.respondWith(fetch(event.request, { cache: 'no-store' }));
+self.addEventListener('fetch', () => {
+  // Pass through directly to network without caching
 });
