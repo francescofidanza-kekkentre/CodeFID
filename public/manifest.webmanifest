@@ -1,0 +1,19 @@
+{
+  "name": "CodeFID — Tablet AI PWA Studio",
+  "short_name": "CodeFID",
+  "description": "IDE touch-first per tablet per creare Progressive Web App con agenti Claude e Antigravity, GitHub e Firebase.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#090d16",
+  "theme_color": "#6366f1",
+  "categories": ["developer", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
