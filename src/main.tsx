@@ -6,7 +6,7 @@ import './index.css';
 // Register CodeFID's own PWA Service Worker for tablet installation
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
   });
 }
 
