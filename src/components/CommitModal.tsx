@@ -139,8 +139,11 @@ export const CommitModal: React.FC<CommitModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5">
-      <div className="w-full max-w-lg bg-[#181818] border border-[#3c3c3c] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]">
+    <div
+      style={{ height: 'var(--app-height, 100dvh)' }}
+      className="fixed top-0 left-0 right-0 z-50 bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-2.5 sm:p-5 overflow-y-auto"
+    >
+      <div className="w-full max-w-lg bg-[#181818] border border-[#3c3c3c] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-full my-auto">
         {/* Focused Header */}
         <div className="px-4 py-3 bg-[#252526] border-b border-[#2b2b2b] flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -235,8 +238,13 @@ export const CommitModal: React.FC<CommitModalProps> = ({
                   setCommitName(e.target.value);
                   if (errorMsg) setErrorMsg(null);
                 }}
+                onFocus={(e) => {
+                  const target = e.currentTarget;
+                  setTimeout(() => {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }, 250);
+                }}
                 placeholder="Es: feat: aggiornamento interfaccia chat"
-                autoFocus
                 className={`w-full bg-[#141414] text-white text-xs sm:text-sm rounded-xl px-3 py-2.5 border focus:outline-none transition ${
                   hasCommitName
                     ? 'border-[#3c3c3c] focus:border-emerald-500'
