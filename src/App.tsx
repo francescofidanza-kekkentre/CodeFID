@@ -144,6 +144,28 @@ export function App() {
   const [isAgentRunning, setIsAgentRunning] = useState(false);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
 
+  // Keep root height synced with visualViewport so on-screen keyboards (iPadOS / Android)
+  // shrink the workspace instead of covering the chat input.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const syncViewportHeight = () => {
+      document.documentElement.style.setProperty('--app-height', `${vv.height}px`);
+      if (window.scrollY !== 0) {
+        window.scrollTo(0, 0);
+      }
+    };
+
+    syncViewportHeight();
+    vv.addEventListener('resize', syncViewportHeight);
+    vv.addEventListener('scroll', syncViewportHeight);
+    return () => {
+      vv.removeEventListener('resize', syncViewportHeight);
+      vv.removeEventListener('scroll', syncViewportHeight);
+    };
+  }, []);
+
   // Save states to localStorage
   useEffect(() => {
     saveStoredJson(STORAGE_KEYS.PROJECTS, projects);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Bot,
   CheckCircle2,
@@ -76,6 +76,11 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
   const [input, setInput] = useState('');
   const [geminiModels, setGeminiModels] = useState<ModelOption[]>(DEFAULT_ANTIGRAVITY_MODELS);
   const [loadingModels, setLoadingModels] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages.length, isRunning]);
 
   const loadGeminiModels = async () => {
     setLoadingModels(true);
@@ -346,6 +351,7 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
             </span>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Quick Slash Prompts Bar */}
@@ -372,6 +378,13 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onFocus={(e) => {
+              const target = e.currentTarget;
+              setTimeout(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                target.scrollIntoView({ block: 'nearest' });
+              }, 250);
+            }}
             placeholder="Chiedi a Claude/Antigravity (o usa !cmd per Bridge CLI)..."
             className="w-full bg-[#252526] text-[#cccccc] text-xs lg:text-[13px] rounded pl-3 pr-9 py-2.5 min-h-[42px] border border-[#3c3c3c] focus:outline-none focus:border-[#007acc]"
           />
