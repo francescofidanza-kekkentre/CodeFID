@@ -55,6 +55,7 @@ interface IntegrationsDrawerProps {
   onUpdateAgentConfig: (next: AgentConfig) => void;
   activeProject: PwaProject;
   onReplaceProjectFiles: (files: ProjectFile[], statusNotice?: string) => void;
+  onClearModifiedHighlights?: () => void;
   onTestBridge: () => Promise<void>;
   bridgeToolsStatus: Record<string, any> | null;
   onOpenGuidedSetup?: (step: 'agent' | 'github') => void;
@@ -73,6 +74,7 @@ export const IntegrationsDrawer: React.FC<IntegrationsDrawerProps> = ({
   onUpdateAgentConfig,
   activeProject,
   onReplaceProjectFiles,
+  onClearModifiedHighlights,
   onTestBridge,
   bridgeToolsStatus,
   onOpenGuidedSetup
@@ -170,6 +172,7 @@ export const IntegrationsDrawer: React.FC<IntegrationsDrawerProps> = ({
         ...githubConfig,
         lastSync: new Date().toLocaleTimeString()
       });
+      onClearModifiedHighlights?.();
       setGhStatus(
         `Push completato! ${res.committedCount} file inviati a ${githubConfig.selectedRepo} (${githubConfig.branch}).`
       );

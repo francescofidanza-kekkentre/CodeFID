@@ -42,8 +42,19 @@ const STORAGE_KEYS = {
   ACTIVE_ID: 'codefid_active_project_v1',
   AGENT_CFG: 'codefid_agent_cfg_v1',
   GITHUB_CFG: 'codefid_github_cfg_v1',
-  FIREBASE_CFG: 'codefid_firebase_cfg_v1'
+  FIREBASE_CFG: 'codefid_firebase_cfg_v1',
+  CHAT_MESSAGES: 'codefid_chat_messages_v1'
 };
+
+function serializeMessagesForStorage(msgs: AgentMessage[]): AgentMessage[] {
+  const recent = msgs.slice(-100);
+  const snapshotCutoff = Math.max(0, recent.length - 3);
+  return recent.map((m, idx) =>
+    idx < snapshotCutoff && m.snapshotFiles
+      ? { ...m, snapshotFiles: undefined }
+      : m
+  );
+}
 
 function createEmptyProject(): PwaProject {
   return {
@@ -145,9 +156,11 @@ export function App() {
     any
   > | null>(null);
 
-  // Agent Conversation History
+  // Agent Conversation History (persisted locally across restarts)
   const [isAgentRunning, setIsAgentRunning] = useState(false);
-  const [messages, setMessages] = useState<AgentMessage[]>([]);
+  const [messages, setMessages] = useState<AgentMessage[]>(() =>
+    loadStoredJson<AgentMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, [])
+  );
   const [agentModifiedFiles, setAgentModifiedFiles] = useState<string[]>([]);
   const [pendingChanges, setPendingChanges] = useState<PendingAgentChanges | null>(null);
 
@@ -195,6 +208,28 @@ export function App() {
   useEffect(() => {
     saveStoredJson(STORAGE_KEYS.FIREBASE_CFG, firebaseConfig);
   }, [firebaseConfig]);
+
+  useEffect(() => {
+    saveStoredJson(
+      STORAGE_KEYS.CHAT_MESSAGES,
+      serializeMessagesForStorage(messages)
+    );
+  }, [messages]);
+
+  useEffect(() => {
+    const persistChatOnExit = () => {
+      saveStoredJson(
+        STORAGE_KEYS.CHAT_MESSAGES,
+        serializeMessagesForStorage(messages)
+      );
+    };
+    window.addEventListener('pagehide', persistChatOnExit);
+    window.addEventListener('beforeunload', persistChatOnExit);
+    return () => {
+      window.removeEventListener('pagehide', persistChatOnExit);
+      window.removeEventListener('beforeunload', persistChatOnExit);
+    };
+  }, [messages]);
 
   // Auto-detect local CLI bridge on mount
   const checkBridgeHealth = async () => {
@@ -487,6 +522,29 @@ export function App() {
     setGuidedSetupOpen(true);
   };
 
+  const handleMarkProjectSynced = () => {
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === activeProject.id
+          ? {
+              ...p,
+              files: p.files.map((f) => ({ ...f, modified: false })),
+              updatedAt: new Date().toISOString()
+            }
+          : p
+      )
+    );
+    setAgentModifiedFiles([]);
+    setPendingChanges(null);
+  };
+
+  const handleClearChat = () => {
+    setMessages([]);
+    setPendingChanges(null);
+    setAgentModifiedFiles([]);
+    saveStoredJson(STORAGE_KEYS.CHAT_MESSAGES, []);
+  };
+
   const handleReplaceProjectFiles = (files: ProjectFile[], notice?: string) => {
     setProjects((prev) =>
       prev.map((p) =>
@@ -497,12 +555,14 @@ export function App() {
                 p.id === 'empty-workspace' && githubConfig.selectedRepo
                   ? githubConfig.selectedRepo
                   : p.name,
-              files,
+              files: files.map((f) => ({ ...f, modified: false })),
               updatedAt: new Date().toISOString()
             }
           : p
       )
     );
+    setAgentModifiedFiles([]);
+    setPendingChanges(null);
     if (files.length > 0 && !files.some((f) => f.path === activeFilePath)) {
       setActiveFilePath(files[0].path);
     } else if (files.length === 0) {
@@ -590,8 +650,12 @@ export function App() {
           }}
           onCreateFile={handleCreateFile}
           onOpenGitHub={() => {
-            setIntegrationsTab('github');
-            setIntegrationsOpen(true);
+            if (githubConfig.connected) {
+              setCommitModalOpen(true);
+            } else {
+              setIntegrationsTab('github');
+              setIntegrationsOpen(true);
+            }
           }}
           onOpenFirebase={() => {
             setIntegrationsTab('firebase');
@@ -668,6 +732,7 @@ export function App() {
                 pendingChanges={pendingChanges}
                 onAcceptPendingChanges={handleAcceptPendingChanges}
                 onRejectPendingChanges={handleRejectPendingChanges}
+                onClearChat={handleClearChat}
               />
             </div>
           </div>
@@ -696,6 +761,7 @@ export function App() {
                 pendingChanges={pendingChanges}
                 onAcceptPendingChanges={handleAcceptPendingChanges}
                 onRejectPendingChanges={handleRejectPendingChanges}
+                onClearChat={handleClearChat}
               />
             </div>
 
@@ -768,6 +834,7 @@ export function App() {
                 pendingChanges={pendingChanges}
                 onAcceptPendingChanges={handleAcceptPendingChanges}
                 onRejectPendingChanges={handleRejectPendingChanges}
+                onClearChat={handleClearChat}
               />
             </div>
             <div className="md:col-span-7 h-full min-h-0 overflow-hidden">
@@ -813,8 +880,12 @@ export function App() {
         terminalOpen={terminalOpen}
         onToggleTerminal={() => setTerminalOpen((prev) => !prev)}
         onOpenGitHub={() => {
-          setIntegrationsTab('github');
-          setIntegrationsOpen(true);
+          if (githubConfig.connected) {
+            setCommitModalOpen(true);
+          } else {
+            setIntegrationsTab('github');
+            setIntegrationsOpen(true);
+          }
         }}
         onOpenPwaStudio={() => setPwaStudioOpen(true)}
         onOpenAgents={() => {
@@ -843,6 +914,7 @@ export function App() {
         onUpdateGithubConfig={setGithubConfig}
         activeProject={activeProject}
         onReplaceProjectFiles={handleReplaceProjectFiles}
+        onClearModifiedHighlights={handleMarkProjectSynced}
         onOpenGitHubSettings={() => {
           setIntegrationsTab('github');
           setIntegrationsOpen(true);
@@ -863,6 +935,7 @@ export function App() {
         onUpdateAgentConfig={setAgentConfig}
         activeProject={activeProject}
         onReplaceProjectFiles={handleReplaceProjectFiles}
+        onClearModifiedHighlights={handleMarkProjectSynced}
         onTestBridge={checkBridgeHealth}
         bridgeToolsStatus={bridgeToolsStatus}
         onOpenGuidedSetup={(step) => openGuidedSetup(step)}

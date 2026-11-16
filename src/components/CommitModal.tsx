@@ -23,6 +23,7 @@ interface CommitModalProps {
   onUpdateGithubConfig: (cfg: GitHubConfig) => void;
   activeProject: PwaProject;
   onReplaceProjectFiles: (files: ProjectFile[], notice?: string) => void;
+  onClearModifiedHighlights?: () => void;
   onOpenGitHubSettings: () => void;
 }
 
@@ -37,6 +38,7 @@ export const CommitModal: React.FC<CommitModalProps> = ({
   onUpdateGithubConfig,
   activeProject,
   onReplaceProjectFiles,
+  onClearModifiedHighlights,
   onOpenGitHubSettings
 }) => {
   const [commitName, setCommitName] = useState('');
@@ -89,6 +91,7 @@ export const CommitModal: React.FC<CommitModalProps> = ({
         connected: true,
         lastSync: new Date().toLocaleTimeString()
       });
+      onClearModifiedHighlights?.();
       setStatusMsg(
         `Commit "${trimmedCommitName}" completato! ${res.committedCount} file caricati su ${githubConfig.selectedRepo}.`
       );
@@ -124,6 +127,7 @@ export const CommitModal: React.FC<CommitModalProps> = ({
         connected: true,
         lastSync: new Date().toLocaleTimeString()
       });
+      onClearModifiedHighlights?.();
       setStatusMsg(
         `Sync completato: ${files.length} file sincronizzati da ${githubConfig.selectedRepo}.`
       );
@@ -248,7 +252,12 @@ export const CommitModal: React.FC<CommitModalProps> = ({
 
             <button
               type="submit"
-              disabled={!hasCommitName || !isGitHubReady || loadingAction !== null}
+              disabled={
+                !hasCommitName ||
+                !isGitHubReady ||
+                activeProject.files.length === 0 ||
+                loadingAction !== null
+              }
               className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-900/40 disabled:text-emerald-200/40 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition"
             >
               {loadingAction === 'commit' ? (

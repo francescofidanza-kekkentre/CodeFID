@@ -11,6 +11,7 @@ import {
   Send,
   Sparkles,
   Terminal,
+  Trash2,
   Users,
   Wand2,
   Wrench,
@@ -45,6 +46,7 @@ interface AgentStudioPanelProps {
   pendingChanges?: PendingAgentChanges | null;
   onAcceptPendingChanges?: () => void;
   onRejectPendingChanges?: () => void;
+  onClearChat?: () => void;
 }
 
 const QUICK_PROMPTS = [
@@ -80,7 +82,8 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
   onOpenGuidedSetup,
   pendingChanges,
   onAcceptPendingChanges,
-  onRejectPendingChanges
+  onRejectPendingChanges,
+  onClearChat
 }) => {
   const [input, setInput] = useState('');
   const [geminiModels, setGeminiModels] = useState<ModelOption[]>(DEFAULT_ANTIGRAVITY_MODELS);
@@ -132,14 +135,26 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
               AI Agent Chat
             </span>
           </div>
-          <button
-            onClick={onOpenSettings}
-            className="text-[11px] text-[#3794ff] hover:underline"
-          >
-            {agentConfig.claudeApiKey || agentConfig.geminiApiKey
-              ? 'API Cloud Attiva'
-              : 'Motore Integrato + BYOK'}
-          </button>
+          <div className="flex items-center gap-2">
+            {onClearChat && messages.length > 0 && (
+              <button
+                type="button"
+                onClick={onClearChat}
+                title="Pulisci cronologia chat"
+                className="p-1 rounded text-[#858585] hover:text-rose-400 hover:bg-[#333333] transition"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <button
+              onClick={onOpenSettings}
+              className="text-[11px] text-[#3794ff] hover:underline"
+            >
+              {agentConfig.claudeApiKey || agentConfig.geminiApiKey
+                ? 'API Cloud Attiva'
+                : 'Motore Integrato + BYOK'}
+            </button>
+          </div>
         </div>
 
         {/* 3 Agent Mode Cards */}
