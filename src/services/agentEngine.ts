@@ -16,6 +16,71 @@ export interface AgentExecutionResult {
   updatedFiles: ProjectFile[];
 }
 
+export interface ModelOption {
+  id: string;
+  label: string;
+}
+
+export const DEFAULT_ANTIGRAVITY_MODELS: ModelOption[] = [
+  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
+  { id: 'gemini-3.8-pro', label: 'Gemini 3.8 Pro' }
+];
+
+export const CLAUDE_MODELS: ModelOption[] = [
+  { id: 'claude-3-7-sonnet-latest', label: 'Claude 3.7 Sonnet (Consigliato Coding)' },
+  { id: 'claude-3-5-sonnet-latest', label: 'Claude 3.5 Sonnet' },
+  { id: 'claude-3-5-haiku-latest', label: 'Claude 3.5 Haiku (Ultra-Fast)' }
+];
+
+/**
+ * Fetches all available Gemini models supporting generateContent for the given API key
+ * (paginating through all pages and excluding retired gemini-2.5 models).
+ * Falls back to DEFAULT_ANTIGRAVITY_MODELS if the key is empty or the request fails.
+ */
+export async function fetchAvailableGeminiModels(apiKey: string): Promise<ModelOption[]> {
+  const trimmed = apiKey.trim();
+  if (!trimmed) return DEFAULT_ANTIGRAVITY_MODELS;
+  try {
+    const allModels: any[] = [];
+    let pageToken = '';
+    for (let page = 0; page < 10; page++) {
+      const tokenParam = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : '';
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?pageSize=100&key=${encodeURIComponent(trimmed)}${tokenParam}`
+      );
+      if (!res.ok) break;
+      const data = await res.json();
+      if (Array.isArray(data?.models)) {
+        allModels.push(...data.models);
+      }
+      if (!data?.nextPageToken) break;
+      pageToken = data.nextPageToken;
+    }
+
+    const models: ModelOption[] = allModels
+      .filter(
+        (m: any) =>
+          typeof m?.name === 'string' &&
+          m.name.includes('gemini') &&
+          !m.name.includes('gemini-2.5') &&
+          Array.isArray(m.supportedGenerationMethods) &&
+          m.supportedGenerationMethods.includes('generateContent')
+      )
+      .map((m: any) => {
+        const id = m.name.replace(/^models\//, '');
+        return {
+          id,
+          label: m.displayName ? `${m.displayName} (${id})` : id
+        };
+      })
+      .sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true }));
+
+    return models.length > 0 ? models : DEFAULT_ANTIGRAVITY_MODELS;
+  } catch {
+    return DEFAULT_ANTIGRAVITY_MODELS;
+  }
+}
+
 function buildSystemPrompt(agent: AgentId, files: ProjectFile[]): string {
   const fileContext = files
     .map((f) => `--- FILE: ${f.path} ---\n${f.content}`)
@@ -147,7 +212,8 @@ async function callGeminiAntigravityApi(
   files: ProjectFile[],
   agentMode: AgentId
 ): Promise<AgentExecutionResult> {
-  const model = config.antigravityModel || 'gemini-2.5-flash';
+  const rawModel = config.antigravityModel || 'gemini-3.8-flash';
+  const model = rawModel.startsWith('gemini-2.5') ? 'gemini-3.8-flash' : rawModel;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(
     config.geminiApiKey.trim()
   )}`;

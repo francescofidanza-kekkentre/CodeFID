@@ -37,6 +37,10 @@ import {
   loadProjectFromFirestore,
   saveProjectToFirestore
 } from '../services/firebaseService';
+import {
+  CLAUDE_MODELS,
+  DEFAULT_ANTIGRAVITY_MODELS
+} from '../services/agentEngine';
 
 interface IntegrationsDrawerProps {
   isOpen: boolean;
@@ -678,15 +682,11 @@ export const IntegrationsDrawer: React.FC<IntegrationsDrawerProps> = ({
                       }
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
                     >
-                      <option value="claude-3-7-sonnet-latest">
-                        Claude 3.7 Sonnet (Consigliato Coding)
-                      </option>
-                      <option value="claude-3-5-sonnet-latest">
-                        Claude 3.5 Sonnet
-                      </option>
-                      <option value="claude-3-5-haiku-latest">
-                        Claude 3.5 Haiku (Ultra-Fast)
-                      </option>
+                      {CLAUDE_MODELS.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -732,12 +732,11 @@ export const IntegrationsDrawer: React.FC<IntegrationsDrawerProps> = ({
                       }
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
                     >
-                      <option value="gemini-2.5-flash">
-                        Antigravity Gemini 2.5 Flash
-                      </option>
-                      <option value="gemini-2.5-pro">
-                        Antigravity Gemini 2.5 Pro
-                      </option>
+                      {DEFAULT_ANTIGRAVITY_MODELS.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          Antigravity {m.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>

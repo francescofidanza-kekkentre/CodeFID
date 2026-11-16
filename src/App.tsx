@@ -85,18 +85,22 @@ export function App() {
   const [layoutMode, setLayoutMode] = useState<TabletLayoutMode>('code-agent');
 
   // Agent Config
-  const [agentConfig, setAgentConfig] = useState<AgentConfig>(() =>
-    loadStoredJson<AgentConfig>(STORAGE_KEYS.AGENT_CFG, {
+  const [agentConfig, setAgentConfig] = useState<AgentConfig>(() => {
+    const loaded = loadStoredJson<AgentConfig>(STORAGE_KEYS.AGENT_CFG, {
       activeAgent: 'antigravity',
       claudeApiKey: '',
       claudeModel: 'claude-3-7-sonnet-latest',
       geminiApiKey: '',
-      antigravityModel: 'gemini-2.5-flash',
+      antigravityModel: 'gemini-3.8-flash',
       bridgeUrl: 'http://localhost:8787',
       bridgeConnected: false,
       autoApplyChanges: true
-    })
-  );
+    });
+    if (!loaded.antigravityModel || loaded.antigravityModel.startsWith('gemini-2.5')) {
+      loaded.antigravityModel = 'gemini-3.8-flash';
+    }
+    return loaded;
+  });
 
   // GitHub Config
   const [githubConfig, setGithubConfig] = useState<GitHubConfig>(() =>
@@ -564,6 +568,7 @@ export function App() {
                 onChangeAgent={(agent) =>
                   setAgentConfig((prev) => ({ ...prev, activeAgent: agent }))
                 }
+                onUpdateAgentConfig={setAgentConfig}
                 onSendPrompt={handleSendAgentPrompt}
                 onRunBridgeCommand={handleRunBridgeCommand}
                 onSelectFile={(path) => setActiveFilePath(path)}
@@ -588,6 +593,7 @@ export function App() {
                 onChangeAgent={(agent) =>
                   setAgentConfig((prev) => ({ ...prev, activeAgent: agent }))
                 }
+                onUpdateAgentConfig={setAgentConfig}
                 onSendPrompt={handleSendAgentPrompt}
                 onRunBridgeCommand={handleRunBridgeCommand}
                 onSelectFile={(path) => setActiveFilePath(path)}
@@ -651,6 +657,7 @@ export function App() {
                 onChangeAgent={(agent) =>
                   setAgentConfig((prev) => ({ ...prev, activeAgent: agent }))
                 }
+                onUpdateAgentConfig={setAgentConfig}
                 onSendPrompt={handleSendAgentPrompt}
                 onRunBridgeCommand={handleRunBridgeCommand}
                 onSelectFile={(path) => {

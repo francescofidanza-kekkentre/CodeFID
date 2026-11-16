@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Bot,
   CheckCircle2,
   Cpu,
   FileCode,
   Loader2,
+  RefreshCw,
   RotateCcw,
   Send,
   Sparkles,
@@ -19,12 +20,19 @@ import {
   AgentMessage,
   ProjectFile
 } from '../types/ide';
+import {
+  CLAUDE_MODELS,
+  DEFAULT_ANTIGRAVITY_MODELS,
+  fetchAvailableGeminiModels,
+  ModelOption
+} from '../services/agentEngine';
 
 interface AgentStudioPanelProps {
   messages: AgentMessage[];
   agentConfig: AgentConfig;
   isRunning: boolean;
   onChangeAgent: (agent: AgentId) => void;
+  onUpdateAgentConfig: (config: AgentConfig) => void;
   onSendPrompt: (prompt: string) => void;
   onRunBridgeCommand: (cmd: string) => void;
   onSelectFile: (path: string) => void;
@@ -57,6 +65,7 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
   agentConfig,
   isRunning,
   onChangeAgent,
+  onUpdateAgentConfig,
   onSendPrompt,
   onRunBridgeCommand,
   onSelectFile,
@@ -65,6 +74,26 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
   onOpenGuidedSetup
 }) => {
   const [input, setInput] = useState('');
+  const [geminiModels, setGeminiModels] = useState<ModelOption[]>(DEFAULT_ANTIGRAVITY_MODELS);
+  const [loadingModels, setLoadingModels] = useState(false);
+
+  const loadGeminiModels = async () => {
+    setLoadingModels(true);
+    try {
+      const models = await fetchAvailableGeminiModels(agentConfig.geminiApiKey);
+      setGeminiModels(models);
+    } finally {
+      setLoadingModels(false);
+    }
+  };
+
+  useEffect(() => {
+    loadGeminiModels();
+  }, [agentConfig.geminiApiKey]);
+
+  const effectiveGeminiModels = geminiModels.some((m) => m.id === agentConfig.antigravityModel)
+    ? geminiModels
+    : [{ id: agentConfig.antigravityModel, label: agentConfig.antigravityModel }, ...geminiModels];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,6 +180,68 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
               AGY + Claude
             </p>
           </button>
+        </div>
+
+        {/* Model Selector Bar */}
+        <div className="flex flex-wrap items-center gap-1.5 bg-[#1e1e1e] border border-[#3c3c3c] rounded-lg px-2 py-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-[#858585] shrink-0">
+            Modello
+          </span>
+
+          {(agentConfig.activeAgent === 'antigravity' || agentConfig.activeAgent === 'swarm') && (
+            <div className="flex items-center gap-1 flex-1 min-w-[140px]">
+              <select
+                aria-label="Modello Antigravity / Gemini"
+                value={agentConfig.antigravityModel}
+                onChange={(e) =>
+                  onUpdateAgentConfig({
+                    ...agentConfig,
+                    antigravityModel: e.target.value
+                  })
+                }
+                className="w-full bg-[#252526] text-[#cccccc] text-[11px] font-medium rounded px-2 py-1 border border-[#3c3c3c] focus:outline-none focus:border-[#007acc] truncate"
+              >
+                {effectiveGeminiModels.map((m) => (
+                  <option key={m.id} value={m.id} className="bg-[#252526] text-[#cccccc]">
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+              {agentConfig.geminiApiKey.trim() && (
+                <button
+                  type="button"
+                  onClick={loadGeminiModels}
+                  disabled={loadingModels}
+                  title="Aggiorna modelli disponibili dalla API Key"
+                  className="p-1 rounded bg-[#252526] hover:bg-[#2a2d2e] border border-[#3c3c3c] text-[#969696] hover:text-white transition shrink-0"
+                >
+                  <RefreshCw className={`w-3 h-3 ${loadingModels ? 'animate-spin text-[#3794ff]' : ''}`} />
+                </button>
+              )}
+            </div>
+          )}
+
+          {(agentConfig.activeAgent === 'claude' || agentConfig.activeAgent === 'swarm') && (
+            <div className="flex items-center gap-1 flex-1 min-w-[140px]">
+              <select
+                aria-label="Modello Claude"
+                value={agentConfig.claudeModel}
+                onChange={(e) =>
+                  onUpdateAgentConfig({
+                    ...agentConfig,
+                    claudeModel: e.target.value
+                  })
+                }
+                className="w-full bg-[#252526] text-[#cccccc] text-[11px] font-medium rounded px-2 py-1 border border-[#3c3c3c] focus:outline-none focus:border-[#007acc] truncate"
+              >
+                {CLAUDE_MODELS.map((m) => (
+                  <option key={m.id} value={m.id} className="bg-[#252526] text-[#cccccc]">
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
