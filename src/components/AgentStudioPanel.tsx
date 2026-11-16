@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Bot,
+  Check,
   CheckCircle2,
   Cpu,
   FileCode,
@@ -12,12 +13,14 @@ import {
   Terminal,
   Users,
   Wand2,
-  Wrench
+  Wrench,
+  X
 } from 'lucide-react';
 import {
   AgentConfig,
   AgentId,
   AgentMessage,
+  PendingAgentChanges,
   ProjectFile
 } from '../types/ide';
 import {
@@ -39,6 +42,9 @@ interface AgentStudioPanelProps {
   onRestoreSnapshot: (files: ProjectFile[]) => void;
   onOpenSettings: () => void;
   onOpenGuidedSetup?: () => void;
+  pendingChanges?: PendingAgentChanges | null;
+  onAcceptPendingChanges?: () => void;
+  onRejectPendingChanges?: () => void;
 }
 
 const QUICK_PROMPTS = [
@@ -71,7 +77,10 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
   onSelectFile,
   onRestoreSnapshot,
   onOpenSettings,
-  onOpenGuidedSetup
+  onOpenGuidedSetup,
+  pendingChanges,
+  onAcceptPendingChanges,
+  onRejectPendingChanges
 }) => {
   const [input, setInput] = useState('');
   const [geminiModels, setGeminiModels] = useState<ModelOption[]>(DEFAULT_ANTIGRAVITY_MODELS);
@@ -290,6 +299,29 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
 
               <div className="whitespace-pre-wrap">{msg.content}</div>
 
+              {/* Modified Files Highlight Banner */}
+              {msg.modifiedFiles && msg.modifiedFiles.length > 0 && (
+                <div className="mt-2.5 p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/35 space-y-1.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>File modificati ({msg.modifiedFiles.length})</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {msg.modifiedFiles.map((filePath) => (
+                      <button
+                        key={filePath}
+                        onClick={() => onSelectFile(filePath)}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 font-mono text-[11px] font-semibold transition"
+                        title={`Apri ${filePath} nell'editor`}
+                      >
+                        <FileCode className="w-3 h-3 text-emerald-300 shrink-0" />
+                        <span>{filePath}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Tool Calls List */}
               {msg.toolCalls && msg.toolCalls.length > 0 && (
                 <div className="mt-2.5 pt-2.5 border-t border-slate-800 space-y-1.5">
@@ -353,6 +385,65 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Pending Changes Confirmation Banner (in basso alla chat) */}
+      {pendingChanges && pendingChanges.files.length > 0 && (
+        <div className="px-3 py-2.5 bg-[#1b222c] border-t border-amber-500/40 space-y-2 shrink-0">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold text-amber-200">
+              Confermi le modifiche ai {pendingChanges.files.length} file evidenziati?
+            </span>
+            <div className="flex items-center gap-1.5 text-[11px] font-mono font-semibold">
+              <span className="px-2 py-0.5 rounded bg-rose-500/20 border border-rose-500/40 text-rose-300">
+                -{pendingChanges.totalDeletedLines} cancellate
+              </span>
+              <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300">
+                +{pendingChanges.totalAddedLines} aggiunte
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+            {pendingChanges.files.map((file) => (
+              <button
+                key={file.path}
+                type="button"
+                onClick={() => onSelectFile(file.path)}
+                className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#252526] hover:bg-[#2a2d2e] border border-[#3c3c3c] text-[11px] font-mono text-[#cccccc] transition"
+                title={`Apri ${file.path} nell'editor`}
+              >
+                <FileCode className="w-3 h-3 text-[#3794ff] shrink-0" />
+                <span className="truncate max-w-[140px]">{file.path}</span>
+                <span className="text-rose-400 font-semibold">-{file.deletedLines}</span>
+                <span className="text-emerald-400 font-semibold">+{file.addedLines}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-0.5">
+            {onRejectPendingChanges && (
+              <button
+                type="button"
+                onClick={onRejectPendingChanges}
+                className="px-3 py-1.5 rounded bg-[#2d2d2d] hover:bg-[#3c3c3c] border border-[#3c3c3c] text-[#cccccc] text-xs font-medium flex items-center gap-1 transition"
+              >
+                <X className="w-3.5 h-3.5 text-rose-400" />
+                <span>Rifiuta</span>
+              </button>
+            )}
+            {onAcceptPendingChanges && (
+              <button
+                type="button"
+                onClick={onAcceptPendingChanges}
+                className="px-3.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Accept</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Quick Slash Prompts Bar */}
       <div className="px-2.5 py-1.5 bg-[#252526] border-t border-[#2b2b2b] flex items-center gap-1.5 overflow-x-auto shrink-0">

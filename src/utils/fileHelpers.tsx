@@ -76,3 +76,63 @@ export function saveStoredJson(key: string, value: unknown): void {
     // Ignore storage quota or private mode errors
   }
 }
+
+/**
+ * Computes the number of added and deleted lines between two file contents.
+ * Uses LCS for normal-sized files and a fast frequency fallback for very large files.
+ */
+export function computeLineDiffStats(
+  oldText: string,
+  newText: string
+): { added: number; deleted: number } {
+  if (oldText === newText) return { added: 0, deleted: 0 };
+  const oldLines = oldText === '' ? [] : oldText.split('\n');
+  const newLines = newText === '' ? [] : newText.split('\n');
+
+  if (oldLines.length === 0) return { added: newLines.length, deleted: 0 };
+  if (newLines.length === 0) return { added: 0, deleted: oldLines.length };
+
+  if (oldLines.length * newLines.length > 400_000) {
+    const counts = new Map<string, number>();
+    for (const line of oldLines) {
+      counts.set(line, (counts.get(line) || 0) + 1);
+    }
+    let common = 0;
+    for (const line of newLines) {
+      const c = counts.get(line) || 0;
+      if (c > 0) {
+        counts.set(line, c - 1);
+        common++;
+      }
+    }
+    return {
+      deleted: oldLines.length - common,
+      added: newLines.length - common
+    };
+  }
+
+  const m = oldLines.length;
+  const n = newLines.length;
+  let prev = new Uint32Array(n + 1);
+  let curr = new Uint32Array(n + 1);
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (oldLines[i - 1] === newLines[j - 1]) {
+        curr[j] = prev[j - 1] + 1;
+      } else {
+        curr[j] = prev[j] >= curr[j - 1] ? prev[j] : curr[j - 1];
+      }
+    }
+    const tmp = prev;
+    prev = curr;
+    curr = tmp;
+    curr.fill(0);
+  }
+
+  const lcs = prev[n];
+  return {
+    deleted: m - lcs,
+    added: n - lcs
+  };
+}

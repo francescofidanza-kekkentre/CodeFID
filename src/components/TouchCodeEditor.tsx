@@ -18,6 +18,7 @@ interface TouchCodeEditorProps {
   onUpdateFileContent: (path: string, newContent: string) => void;
   onCreateFile: (path: string) => void;
   onAskAgentAboutFile: (agent: 'claude' | 'antigravity', file: ProjectFile) => void;
+  agentModifiedFiles?: string[];
 }
 
 const TOUCH_KEYS = [
@@ -45,7 +46,8 @@ export const TouchCodeEditor: React.FC<TouchCodeEditorProps> = ({
   onSelectFile,
   onUpdateFileContent,
   onCreateFile,
-  onAskAgentAboutFile
+  onAskAgentAboutFile,
+  agentModifiedFiles = []
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [copied, setCopied] = useState(false);
@@ -110,18 +112,31 @@ export const TouchCodeEditor: React.FC<TouchCodeEditorProps> = ({
         <div className="flex items-center overflow-x-auto no-scrollbar">
           {files.map((file) => {
             const isActive = file.path === activeFile?.path;
+            const isAgentModified = agentModifiedFiles.includes(file.path);
             return (
               <button
                 key={file.path}
                 onClick={() => onSelectFile(file.path)}
                 className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium whitespace-nowrap border-r border-[#2b2b2b] transition ${
                   isActive
-                    ? 'bg-[#1e1e1e] text-white border-t-2 border-t-[#007acc]'
+                    ? isAgentModified
+                      ? 'bg-[#1e1e1e] text-emerald-300 border-t-2 border-t-emerald-400'
+                      : 'bg-[#1e1e1e] text-white border-t-2 border-t-[#007acc]'
+                    : isAgentModified
+                    ? 'bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25 border-t-2 border-t-emerald-400'
                     : 'bg-[#2d2d2d] text-[#969696] hover:bg-[#2a2d2e] hover:text-[#cccccc] border-t-2 border-t-transparent'
                 }`}
               >
                 {renderFileIcon(file.path)}
                 <span>{file.path}</span>
+                {isAgentModified && (
+                  <span
+                    className="px-1 py-0.5 rounded bg-emerald-500/25 border border-emerald-400/50 text-[9px] font-bold text-emerald-300 uppercase leading-none"
+                    title="Modificato dall'agente AI"
+                  >
+                    AI
+                  </span>
+                )}
                 {file.modified && (
                   <span className="w-1.5 h-1.5 rounded-full bg-[#e2c08d]" title="Modificato" />
                 )}

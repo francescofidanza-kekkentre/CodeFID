@@ -10,6 +10,7 @@ import {
   FolderCode,
   FolderKanban,
   GitBranch,
+  GitCommitHorizontal,
   Columns3,
   Maximize2,
   Minimize2,
@@ -40,6 +41,7 @@ interface TabletTopBarProps {
   pwaScore: number;
   onOpenPwaStudio: () => void;
   onOpenIntegrations: (tab: 'github' | 'firebase' | 'agents') => void;
+  onOpenCommitModal: () => void;
   githubConfig: GitHubConfig;
   firebaseConfig: FirebaseConfig;
   bridgeConnected: boolean;
@@ -59,6 +61,7 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
   pwaScore,
   onOpenPwaStudio,
   onOpenIntegrations,
+  onOpenCommitModal,
   githubConfig,
   firebaseConfig,
   bridgeConnected,
@@ -290,6 +293,16 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
         >
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
           <span>PWA {pwaScore}%</span>
+        </button>
+
+        {/* Dedicated Commit & Sync Button */}
+        <button
+          onClick={onOpenCommitModal}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition"
+          title="Commit su GitHub e Sync"
+        >
+          <GitCommitHorizontal className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Commit</span>
         </button>
 
         {/* GitHub Integration Button */}

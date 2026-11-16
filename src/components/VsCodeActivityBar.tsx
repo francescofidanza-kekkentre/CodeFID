@@ -35,6 +35,7 @@ interface VsCodeActivityBarProps {
   githubConnected: boolean;
   isAgentVisible?: boolean;
   isPreviewVisible?: boolean;
+  agentModifiedFiles?: string[];
 }
 
 /**
@@ -60,7 +61,8 @@ export const VsCodeActivityBar: React.FC<VsCodeActivityBarProps> = ({
   onToggleTerminal,
   githubConnected,
   isAgentVisible,
-  isPreviewVisible
+  isPreviewVisible,
+  agentModifiedFiles = []
 }) => {
   const handleNewFilePrompt = () => {
     const name = window.prompt(
@@ -206,28 +208,43 @@ export const VsCodeActivityBar: React.FC<VsCodeActivityBarProps> = ({
             ) : (
               files.map((file) => {
                 const isActive = file.path === activeFilePath;
+                const isAgentModified = agentModifiedFiles.includes(file.path);
                 return (
                   <button
                     key={file.path}
                     onClick={() => onSelectFile(file.path)}
-                    className={`w-full px-3 py-1.5 min-h-[34px] flex items-center justify-between gap-2 text-xs text-left transition ${
+                    className={`w-full px-3 py-1.5 min-h-[34px] flex items-center justify-between gap-2 text-xs text-left transition border-l-2 ${
                       isActive
-                        ? 'bg-[#04395e] text-white'
-                        : 'text-[#cccccc] hover:bg-[#2a2d2e]'
+                        ? 'bg-[#04395e] text-white border-l-[#007acc]'
+                        : isAgentModified
+                        ? 'bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25 border-l-emerald-400'
+                        : 'text-[#cccccc] hover:bg-[#2a2d2e] border-l-transparent'
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       {renderFileIcon(file.path)}
-                      <span className="truncate">{file.path}</span>
-                    </div>
-                    {file.modified && (
-                      <span
-                        className="text-[10px] font-bold text-[#e2c08d] shrink-0"
-                        title="Modificato"
-                      >
-                        M
+                      <span className={`truncate ${isAgentModified ? 'font-semibold' : ''}`}>
+                        {file.path}
                       </span>
-                    )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {isAgentModified && (
+                        <span
+                          className="px-1.5 py-0.5 rounded bg-emerald-500/25 border border-emerald-400/50 text-[9px] font-bold text-emerald-300 uppercase"
+                          title="Modificato dall'agente AI"
+                        >
+                          AI
+                        </span>
+                      )}
+                      {file.modified && (
+                        <span
+                          className="text-[10px] font-bold text-[#e2c08d]"
+                          title="Modificato"
+                        >
+                          M
+                        </span>
+                      )}
+                    </div>
                   </button>
                 );
               })

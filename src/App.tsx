@@ -5,6 +5,8 @@ import {
   AgentMessage,
   FirebaseConfig,
   GitHubConfig,
+  PendingAgentChanges,
+  PendingFileChange,
   ProjectFile,
   PwaManifestConfig,
   PwaProject,
@@ -17,6 +19,7 @@ import {
 } from './services/pwaPreview';
 import { runAgentTask } from './services/agentEngine';
 import {
+  computeLineDiffStats,
   detectFileLanguage,
   execBridgeCommand,
   loadStoredJson,
@@ -27,6 +30,7 @@ import { TouchCodeEditor } from './components/TouchCodeEditor';
 import { AgentStudioPanel } from './components/AgentStudioPanel';
 import { LivePwaPreview } from './components/LivePwaPreview';
 import { PwaBuilderModal } from './components/PwaBuilderModal';
+import { CommitModal } from './components/CommitModal';
 import { IntegrationsDrawer } from './components/IntegrationsDrawer';
 import { GuidedSetupModal, GuidedStep } from './components/GuidedSetupModal';
 import { VsCodeActivityBar } from './components/VsCodeActivityBar';
@@ -127,6 +131,7 @@ export function App() {
 
   // Modals & Drawers
   const [pwaStudioOpen, setPwaStudioOpen] = useState(false);
+  const [commitModalOpen, setCommitModalOpen] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const [guidedSetupOpen, setGuidedSetupOpen] = useState(false);
   const [guidedSetupStep, setGuidedSetupStep] = useState<GuidedStep>('agent');
@@ -143,6 +148,8 @@ export function App() {
   // Agent Conversation History
   const [isAgentRunning, setIsAgentRunning] = useState(false);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
+  const [agentModifiedFiles, setAgentModifiedFiles] = useState<string[]>([]);
+  const [pendingChanges, setPendingChanges] = useState<PendingAgentChanges | null>(null);
 
   // Keep root height synced with visualViewport so on-screen keyboards (iPadOS / Android)
   // shrink the workspace instead of covering the chat input.
@@ -314,7 +321,36 @@ export function App() {
         firebaseConfig
       });
 
-      updateActiveProjectFiles(result.updatedFiles);
+      const changedFiles: PendingFileChange[] = [];
+      for (const nextFile of result.updatedFiles) {
+        const prevFile = snapshot.find((f) => f.path === nextFile.path);
+        if (!prevFile || prevFile.content !== nextFile.content) {
+          const stats = computeLineDiffStats(prevFile?.content || '', nextFile.content);
+          changedFiles.push({
+            path: nextFile.path,
+            addedLines: stats.added,
+            deletedLines: stats.deleted,
+            isNew: !prevFile
+          });
+        }
+      }
+
+      const modifiedByAgent = changedFiles.map((f) => f.path);
+
+      if (changedFiles.length > 0) {
+        setAgentModifiedFiles(modifiedByAgent);
+        if (!modifiedByAgent.includes(activeFilePath)) {
+          setActiveFilePath(modifiedByAgent[0]);
+        }
+        setPendingChanges({
+          id: `pending-${Date.now()}`,
+          agentLabel: result.agentLabel,
+          files: changedFiles,
+          updatedFiles: result.updatedFiles,
+          totalDeletedLines: changedFiles.reduce((acc, f) => acc + f.deletedLines, 0),
+          totalAddedLines: changedFiles.reduce((acc, f) => acc + f.addedLines, 0)
+        });
+      }
 
       const assistantMsg: AgentMessage = {
         id: `ai-${Date.now()}`,
@@ -324,7 +360,8 @@ export function App() {
         content: result.replyText,
         timestamp: new Date().toLocaleTimeString(),
         toolCalls: result.toolCalls,
-        snapshotFiles: snapshot
+        snapshotFiles: snapshot,
+        modifiedFiles: modifiedByAgent
       };
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err: any) {
@@ -342,6 +379,31 @@ export function App() {
     } finally {
       setIsAgentRunning(false);
     }
+  };
+
+  const handleAcceptPendingChanges = () => {
+    if (!pendingChanges) return;
+    updateActiveProjectFiles(pendingChanges.updatedFiles);
+    const applied = pendingChanges;
+    setPendingChanges(null);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `sys-accept-${Date.now()}`,
+        role: 'assistant',
+        agent: agentConfig.activeAgent,
+        agentLabel: 'Modifiche Confermate',
+        content: `✅ Modifiche applicate a ${applied.files.length} file (${applied.totalDeletedLines} righe cancellate, ${applied.totalAddedLines} aggiunte).`,
+        timestamp: new Date().toLocaleTimeString(),
+        modifiedFiles: applied.files.map((f) => f.path)
+      }
+    ]);
+  };
+
+  const handleRejectPendingChanges = () => {
+    if (!pendingChanges) return;
+    setPendingChanges(null);
+    setAgentModifiedFiles([]);
   };
 
   // Execute command via CLI Bridge (!command)
@@ -504,6 +566,7 @@ export function App() {
           setIntegrationsTab(tab);
           setIntegrationsOpen(true);
         }}
+        onOpenCommitModal={() => setCommitModalOpen(true)}
         githubConfig={githubConfig}
         firebaseConfig={firebaseConfig}
         bridgeConnected={agentConfig.bridgeConnected}
@@ -561,6 +624,7 @@ export function App() {
             layoutMode === 'agent-preview' ||
             layoutMode === 'preview-only'
           }
+          agentModifiedFiles={agentModifiedFiles}
         />
 
         {/* Right Column: Workspace + Collapsible Bottom Terminal */}
@@ -578,6 +642,7 @@ export function App() {
                 onUpdateFileContent={handleUpdateFileContent}
                 onCreateFile={handleCreateFile}
                 onAskAgentAboutFile={handleAskAgentAboutFile}
+                agentModifiedFiles={agentModifiedFiles}
               />
             </div>
 
@@ -600,6 +665,9 @@ export function App() {
                   setIntegrationsOpen(true);
                 }}
                 onOpenGuidedSetup={() => openGuidedSetup('agent')}
+                pendingChanges={pendingChanges}
+                onAcceptPendingChanges={handleAcceptPendingChanges}
+                onRejectPendingChanges={handleRejectPendingChanges}
               />
             </div>
           </div>
@@ -625,6 +693,9 @@ export function App() {
                   setIntegrationsOpen(true);
                 }}
                 onOpenGuidedSetup={() => openGuidedSetup('agent')}
+                pendingChanges={pendingChanges}
+                onAcceptPendingChanges={handleAcceptPendingChanges}
+                onRejectPendingChanges={handleRejectPendingChanges}
               />
             </div>
 
@@ -636,6 +707,7 @@ export function App() {
                 onUpdateFileContent={handleUpdateFileContent}
                 onCreateFile={handleCreateFile}
                 onAskAgentAboutFile={handleAskAgentAboutFile}
+                agentModifiedFiles={agentModifiedFiles}
               />
             </div>
 
@@ -658,6 +730,7 @@ export function App() {
                 onUpdateFileContent={handleUpdateFileContent}
                 onCreateFile={handleCreateFile}
                 onAskAgentAboutFile={handleAskAgentAboutFile}
+                agentModifiedFiles={agentModifiedFiles}
               />
             </div>
             <div className="md:col-span-6 h-full min-h-0 overflow-hidden">
@@ -692,6 +765,9 @@ export function App() {
                   setIntegrationsOpen(true);
                 }}
                 onOpenGuidedSetup={() => openGuidedSetup('agent')}
+                pendingChanges={pendingChanges}
+                onAcceptPendingChanges={handleAcceptPendingChanges}
+                onRejectPendingChanges={handleRejectPendingChanges}
               />
             </div>
             <div className="md:col-span-7 h-full min-h-0 overflow-hidden">
@@ -757,6 +833,20 @@ export function App() {
         auditScore={pwaAudit.score}
         auditItems={pwaAudit.items}
         onFixWithAgent={handleSendAgentPrompt}
+      />
+
+      {/* Focused GitHub Commit & Sync Modal */}
+      <CommitModal
+        isOpen={commitModalOpen}
+        onClose={() => setCommitModalOpen(false)}
+        githubConfig={githubConfig}
+        onUpdateGithubConfig={setGithubConfig}
+        activeProject={activeProject}
+        onReplaceProjectFiles={handleReplaceProjectFiles}
+        onOpenGitHubSettings={() => {
+          setIntegrationsTab('github');
+          setIntegrationsOpen(true);
+        }}
       />
 
       {/* GitHub, Firebase & Agent/Bridge Integrations Drawer */}

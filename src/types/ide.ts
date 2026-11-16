@@ -49,6 +49,23 @@ export interface AgentMessage {
   timestamp: string;
   toolCalls?: AgentToolCall[];
   snapshotFiles?: ProjectFile[];
+  modifiedFiles?: string[];
+}
+
+export interface PendingFileChange {
+  path: string;
+  addedLines: number;
+  deletedLines: number;
+  isNew: boolean;
+}
+
+export interface PendingAgentChanges {
+  id: string;
+  agentLabel: string;
+  files: PendingFileChange[];
+  updatedFiles: ProjectFile[];
+  totalDeletedLines: number;
+  totalAddedLines: number;
 }
 
 export interface AgentConfig {
