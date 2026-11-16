@@ -82,7 +82,12 @@ export interface FirebaseConfig {
   lastCloudSave?: string;
 }
 
-export type TabletLayoutMode = 'split-3' | 'code-preview' | 'agent-preview' | 'preview-only';
+export type TabletLayoutMode =
+  | 'code-agent'
+  | 'split-3'
+  | 'code-preview'
+  | 'agent-preview'
+  | 'preview-only';
 
 export type DeviceFrame = 'ipad-pro' | 'galaxy-tab' | 'iphone-16' | 'responsive';
 

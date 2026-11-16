@@ -4,7 +4,10 @@ import {
   Code2,
   Cpu,
   Download,
+  Eye,
+  EyeOff,
   Flame,
+  FolderCode,
   FolderKanban,
   GitBranch,
   Columns3,
@@ -31,6 +34,7 @@ interface TabletTopBarProps {
   onSelectProject: (id: string) => void;
   layoutMode: TabletLayoutMode;
   onChangeLayout: (mode: TabletLayoutMode) => void;
+  onTogglePreview?: () => void;
   activeAgent: AgentId;
   onChangeAgent: (agent: AgentId) => void;
   pwaScore: number;
@@ -49,6 +53,7 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
   onSelectProject,
   layoutMode,
   onChangeLayout,
+  onTogglePreview,
   activeAgent,
   onChangeAgent,
   pwaScore,
@@ -144,55 +149,99 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
       </div>
 
       {/* Center: Tablet Layout Mode Switcher */}
-      <div className="flex items-center bg-[#252526] p-0.5 rounded-md border border-[#3c3c3c] shrink-0">
-        <button
-          onClick={() => onChangeLayout('split-3')}
-          className={`flex items-center gap-1.5 px-2.5 py-1 min-h-[32px] rounded text-xs font-medium transition ${
-            layoutMode === 'split-3'
-              ? 'bg-[#007acc] text-white'
-              : 'text-[#969696] hover:text-[#cccccc]'
-          }`}
-          title="Vista 3 Pannelli (Agent + Codice + Live PWA)"
-        >
-          <Columns3 className="w-3.5 h-3.5" />
-          <span className="hidden lg:inline">Studio 3-Vie</span>
-        </button>
-        <button
-          onClick={() => onChangeLayout('code-preview')}
-          className={`flex items-center gap-1.5 px-2.5 py-1 min-h-[32px] rounded text-xs font-medium transition ${
-            layoutMode === 'code-preview'
-              ? 'bg-[#007acc] text-white'
-              : 'text-[#969696] hover:text-[#cccccc]'
-          }`}
-          title="Editor Codice + Anteprima Tablet"
-        >
-          <SplitSquareVertical className="w-3.5 h-3.5" />
-          <span className="hidden lg:inline">Codice + PWA</span>
-        </button>
-        <button
-          onClick={() => onChangeLayout('agent-preview')}
-          className={`flex items-center gap-1.5 px-2.5 py-1 min-h-[32px] rounded text-xs font-medium transition ${
-            layoutMode === 'agent-preview'
-              ? 'bg-[#007acc] text-white'
-              : 'text-[#969696] hover:text-[#cccccc]'
-          }`}
-          title="Agenti AI + Anteprima Live"
-        >
-          <Bot className="w-3.5 h-3.5" />
-          <span className="hidden lg:inline">Agent + PWA</span>
-        </button>
-        <button
-          onClick={() => onChangeLayout('preview-only')}
-          className={`flex items-center gap-1.5 px-2.5 py-1 min-h-[32px] rounded text-xs font-medium transition ${
-            layoutMode === 'preview-only'
-              ? 'bg-[#007acc] text-white'
-              : 'text-[#969696] hover:text-[#cccccc]'
-          }`}
-          title="Simulatore Tablet Schermo Intero"
-        >
-          <Smartphone className="w-3.5 h-3.5" />
-          <span className="hidden lg:inline">Simulatore</span>
-        </button>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center bg-[#252526] p-0.5 rounded-md border border-[#3c3c3c]">
+          <button
+            onClick={() => onChangeLayout('code-agent')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 min-h-[32px] rounded text-xs font-medium transition ${
+              layoutMode === 'code-agent'
+                ? 'bg-[#007acc] text-white shadow-sm'
+                : 'text-[#969696] hover:text-[#cccccc]'
+            }`}
+            title="Vista Cartelle + Codice + Agente (Senza Anteprima App)"
+          >
+            <FolderCode className="w-3.5 h-3.5" />
+            <span className="hidden xl:inline">Cartelle + Codice + Agente</span>
+            <span className="hidden md:inline xl:hidden">Codice + Agente</span>
+          </button>
+          <button
+            onClick={() => onChangeLayout('split-3')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 min-h-[32px] rounded text-xs font-medium transition ${
+              layoutMode === 'split-3'
+                ? 'bg-[#007acc] text-white'
+                : 'text-[#969696] hover:text-[#cccccc]'
+            }`}
+            title="Studio 3-Vie con Anteprima (Agente + Codice + Live PWA)"
+          >
+            <Columns3 className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline">Studio + PWA</span>
+          </button>
+          <button
+            onClick={() => onChangeLayout('code-preview')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 min-h-[32px] rounded text-xs font-medium transition ${
+              layoutMode === 'code-preview'
+                ? 'bg-[#007acc] text-white'
+                : 'text-[#969696] hover:text-[#cccccc]'
+            }`}
+            title="Editor Codice + Anteprima Tablet"
+          >
+            <SplitSquareVertical className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline">Codice + PWA</span>
+          </button>
+          <button
+            onClick={() => onChangeLayout('agent-preview')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 min-h-[32px] rounded text-xs font-medium transition ${
+              layoutMode === 'agent-preview'
+                ? 'bg-[#007acc] text-white'
+                : 'text-[#969696] hover:text-[#cccccc]'
+            }`}
+            title="Agenti AI + Anteprima Live"
+          >
+            <Bot className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline">Agent + PWA</span>
+          </button>
+          <button
+            onClick={() => onChangeLayout('preview-only')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 min-h-[32px] rounded text-xs font-medium transition ${
+              layoutMode === 'preview-only'
+                ? 'bg-[#007acc] text-white'
+                : 'text-[#969696] hover:text-[#cccccc]'
+            }`}
+            title="Simulatore Tablet Schermo Intero"
+          >
+            <Smartphone className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline">Simulatore</span>
+          </button>
+        </div>
+
+        {/* Quick Toggle Anteprima App */}
+        {onTogglePreview && (
+          <button
+            onClick={onTogglePreview}
+            className={`flex items-center gap-1.5 px-2.5 py-1 min-h-[32px] rounded-md text-xs font-medium border transition ${
+              layoutMode === 'code-agent'
+                ? 'bg-[#252526] hover:bg-[#2a2d2e] text-[#969696] hover:text-white border-[#3c3c3c]'
+                : 'bg-[#007acc]/20 text-[#3794ff] border-[#007acc]/40 hover:bg-[#007acc]/30'
+            }`}
+            title={
+              layoutMode === 'code-agent'
+                ? 'Mostra Anteprima App (Passa a Studio + PWA)'
+                : "Nascondi Anteprima App (Mostra Cartelle, Codice e Agente)"
+            }
+          >
+            {layoutMode === 'code-agent' ? (
+              <>
+                <Eye className="w-3.5 h-3.5" />
+                <span className="hidden 2xl:inline">Mostra Anteprima</span>
+              </>
+            ) : (
+              <>
+                <EyeOff className="w-3.5 h-3.5" />
+                <span className="hidden 2xl:inline">Nascondi Anteprima</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Right: Quick Agent Selector, PWA Score, GitHub & Firebase */}

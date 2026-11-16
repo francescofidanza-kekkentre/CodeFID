@@ -33,6 +33,8 @@ interface VsCodeActivityBarProps {
   terminalOpen: boolean;
   onToggleTerminal: () => void;
   githubConnected: boolean;
+  isAgentVisible?: boolean;
+  isPreviewVisible?: boolean;
 }
 
 /**
@@ -56,7 +58,9 @@ export const VsCodeActivityBar: React.FC<VsCodeActivityBarProps> = ({
   onFocusPreview,
   terminalOpen,
   onToggleTerminal,
-  githubConnected
+  githubConnected,
+  isAgentVisible,
+  isPreviewVisible
 }) => {
   const handleNewFilePrompt = () => {
     const name = window.prompt(
@@ -86,8 +90,12 @@ export const VsCodeActivityBar: React.FC<VsCodeActivityBarProps> = ({
 
           <button
             onClick={onFocusAgents}
-            title="AI Agent Chat"
-            className="w-full h-11 flex items-center justify-center text-[#858585] hover:text-white border-l-2 border-transparent transition"
+            title="AI Agent Chat (Cartelle + Codice + Agente)"
+            className={`w-full h-11 flex items-center justify-center relative transition ${
+              isAgentVisible
+                ? 'text-white border-l-2 border-[#007acc]'
+                : 'text-[#858585] hover:text-white border-l-2 border-transparent'
+            }`}
           >
             <Bot className="w-5 h-5" />
           </button>
@@ -95,7 +103,11 @@ export const VsCodeActivityBar: React.FC<VsCodeActivityBarProps> = ({
           <button
             onClick={onFocusPreview}
             title="Anteprima Tablet Live"
-            className="w-full h-11 flex items-center justify-center text-[#858585] hover:text-white border-l-2 border-transparent transition"
+            className={`w-full h-11 flex items-center justify-center relative transition ${
+              isPreviewVisible
+                ? 'text-white border-l-2 border-[#007acc]'
+                : 'text-[#858585] hover:text-white border-l-2 border-transparent'
+            }`}
           >
             <Tablet className="w-5 h-5" />
           </button>

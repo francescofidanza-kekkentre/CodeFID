@@ -82,7 +82,7 @@ export function App() {
   const [activeFilePath, setActiveFilePath] = useState<string>(
     () => activeProject.files[0]?.path || ''
   );
-  const [layoutMode, setLayoutMode] = useState<TabletLayoutMode>('split-3');
+  const [layoutMode, setLayoutMode] = useState<TabletLayoutMode>('code-agent');
 
   // Agent Config
   const [agentConfig, setAgentConfig] = useState<AgentConfig>(() =>
@@ -126,9 +126,7 @@ export function App() {
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const [guidedSetupOpen, setGuidedSetupOpen] = useState(false);
   const [guidedSetupStep, setGuidedSetupStep] = useState<GuidedStep>('agent');
-  const [explorerOpen, setExplorerOpen] = useState<boolean>(() =>
-    typeof window !== 'undefined' ? window.innerWidth >= 1280 : false
-  );
+  const [explorerOpen, setExplorerOpen] = useState<boolean>(true);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [integrationsTab, setIntegrationsTab] = useState<
     'github' | 'firebase' | 'agents'
@@ -456,7 +454,20 @@ export function App() {
           setActiveFilePath(target?.files[0]?.path || '');
         }}
         layoutMode={layoutMode}
-        onChangeLayout={setLayoutMode}
+        onChangeLayout={(mode) => {
+          setLayoutMode(mode);
+          if (mode === 'code-agent') {
+            setExplorerOpen(true);
+          }
+        }}
+        onTogglePreview={() => {
+          if (layoutMode === 'code-agent') {
+            setLayoutMode('split-3');
+          } else {
+            setLayoutMode('code-agent');
+            setExplorerOpen(true);
+          }
+        }}
         activeAgent={agentConfig.activeAgent}
         onChangeAgent={(agent: AgentId) =>
           setAgentConfig((prev) => ({ ...prev, activeAgent: agent }))
@@ -484,8 +495,8 @@ export function App() {
           projectName={activeProject.name}
           onSelectFile={(path) => {
             setActiveFilePath(path);
-            if (layoutMode === 'agent-preview' || layoutMode === 'preview-only') {
-              setLayoutMode('split-3');
+            if (layoutMode === 'preview-only') {
+              setLayoutMode('code-agent');
             }
           }}
           onCreateFile={handleCreateFile}
@@ -503,17 +514,70 @@ export function App() {
             setIntegrationsOpen(true);
           }}
           onOpenGuidedSetup={() => openGuidedSetup('agent')}
-          onFocusAgents={() => setLayoutMode('agent-preview')}
-          onFocusPreview={() => setLayoutMode('preview-only')}
+          onFocusAgents={() => {
+            setExplorerOpen(true);
+            setLayoutMode('code-agent');
+          }}
+          onFocusPreview={() =>
+            setLayoutMode((prev) => (prev === 'preview-only' ? 'code-agent' : 'preview-only'))
+          }
           terminalOpen={terminalOpen}
           onToggleTerminal={() => setTerminalOpen((prev) => !prev)}
           githubConnected={githubConfig.connected}
+          isAgentVisible={
+            layoutMode === 'code-agent' ||
+            layoutMode === 'split-3' ||
+            layoutMode === 'agent-preview'
+          }
+          isPreviewVisible={
+            layoutMode === 'split-3' ||
+            layoutMode === 'code-preview' ||
+            layoutMode === 'agent-preview' ||
+            layoutMode === 'preview-only'
+          }
         />
 
         {/* Right Column: Workspace + Collapsible Bottom Terminal */}
         <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
           {/* Main Tablet Workspace Grid */}
           <main className="flex-1 min-w-0 min-h-0 overflow-hidden">
+        {layoutMode === 'code-agent' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 h-full overflow-hidden">
+            {/* Codice (Editor) */}
+            <div className="lg:col-span-7 h-1/2 lg:h-full min-h-0 overflow-hidden border-b lg:border-b-0 lg:border-r border-[#2b2b2b]">
+              <TouchCodeEditor
+                files={activeProject.files}
+                activeFilePath={activeFilePath}
+                onSelectFile={setActiveFilePath}
+                onUpdateFileContent={handleUpdateFileContent}
+                onCreateFile={handleCreateFile}
+                onAskAgentAboutFile={handleAskAgentAboutFile}
+              />
+            </div>
+
+            {/* Agente (Agent Studio) */}
+            <div className="lg:col-span-5 h-1/2 lg:h-full min-h-0 overflow-hidden">
+              <AgentStudioPanel
+                messages={messages}
+                agentConfig={agentConfig}
+                isRunning={isAgentRunning}
+                onChangeAgent={(agent) =>
+                  setAgentConfig((prev) => ({ ...prev, activeAgent: agent }))
+                }
+                onSendPrompt={handleSendAgentPrompt}
+                onRunBridgeCommand={handleRunBridgeCommand}
+                onSelectFile={(path) => setActiveFilePath(path)}
+                onRestoreSnapshot={(files) => updateActiveProjectFiles(files)}
+                onOpenSettings={() => {
+                  setIntegrationsTab('agents');
+                  setIntegrationsOpen(true);
+                }}
+                onOpenGuidedSetup={() => openGuidedSetup('agent')}
+              />
+            </div>
+          </div>
+        )}
+
         {layoutMode === 'split-3' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 h-full overflow-hidden">
             <div className="md:col-span-1 lg:col-span-4 xl:col-span-3 h-full min-h-0 overflow-hidden border-b md:border-b-0 border-slate-800/80">
@@ -591,7 +655,7 @@ export function App() {
                 onRunBridgeCommand={handleRunBridgeCommand}
                 onSelectFile={(path) => {
                   setActiveFilePath(path);
-                  setLayoutMode('split-3');
+                  setLayoutMode('code-agent');
                 }}
                 onRestoreSnapshot={(files) => updateActiveProjectFiles(files)}
                 onOpenSettings={() => {
