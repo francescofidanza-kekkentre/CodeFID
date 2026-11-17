@@ -164,25 +164,29 @@ export function App() {
   const [agentModifiedFiles, setAgentModifiedFiles] = useState<string[]>([]);
   const [pendingChanges, setPendingChanges] = useState<PendingAgentChanges | null>(null);
 
-  // Keep root height synced with visualViewport so on-screen keyboards (iPadOS / Android)
-  // shrink the workspace instead of covering the chat input.
+  // Keep keyboard inset & visualViewport synced without resizing the fullscreen surface
   useEffect(() => {
     const vv = window.visualViewport;
-    if (!vv) return;
 
-    const syncViewportHeight = () => {
-      document.documentElement.style.setProperty('--app-height', `${vv.height}px`);
-      if (window.scrollY !== 0) {
-        window.scrollTo(0, 0);
-      }
+    const syncViewportMetrics = () => {
+      const visibleHeight = Math.round(vv ? vv.height : window.innerHeight);
+      const keyboardInset = vv
+        ? Math.max(0, Math.round(window.innerHeight - vv.height))
+        : 0;
+      document.documentElement.style.setProperty('--app-height', `${visibleHeight}px`);
+      document.documentElement.style.setProperty('--keyboard-inset', `${keyboardInset}px`);
     };
 
-    syncViewportHeight();
-    vv.addEventListener('resize', syncViewportHeight);
-    vv.addEventListener('scroll', syncViewportHeight);
+    syncViewportMetrics();
+    vv?.addEventListener('resize', syncViewportMetrics);
+    window.addEventListener('resize', syncViewportMetrics);
+    document.addEventListener('fullscreenchange', syncViewportMetrics);
+    document.addEventListener('webkitfullscreenchange', syncViewportMetrics);
     return () => {
-      vv.removeEventListener('resize', syncViewportHeight);
-      vv.removeEventListener('scroll', syncViewportHeight);
+      vv?.removeEventListener('resize', syncViewportMetrics);
+      window.removeEventListener('resize', syncViewportMetrics);
+      document.removeEventListener('fullscreenchange', syncViewportMetrics);
+      document.removeEventListener('webkitfullscreenchange', syncViewportMetrics);
     };
   }, []);
 
@@ -209,20 +213,27 @@ export function App() {
     saveStoredJson(STORAGE_KEYS.FIREBASE_CFG, firebaseConfig);
   }, [firebaseConfig]);
 
+  const persistChatMessages = (msgs: AgentMessage[]) => {
+    const withSnapshots = serializeMessagesForStorage(msgs);
+    try {
+      localStorage.setItem(STORAGE_KEYS.CHAT_MESSAGES, JSON.stringify(withSnapshots));
+    } catch {
+      // Fallback: strip file snapshots if storage quota is tight so prompts & replies are still saved
+      try {
+        const textOnly = msgs.slice(-100).map((m) => ({ ...m, snapshotFiles: undefined }));
+        localStorage.setItem(STORAGE_KEYS.CHAT_MESSAGES, JSON.stringify(textOnly));
+      } catch {
+        // Ignore storage errors in private mode
+      }
+    }
+  };
+
   useEffect(() => {
-    saveStoredJson(
-      STORAGE_KEYS.CHAT_MESSAGES,
-      serializeMessagesForStorage(messages)
-    );
+    persistChatMessages(messages);
   }, [messages]);
 
   useEffect(() => {
-    const persistChatOnExit = () => {
-      saveStoredJson(
-        STORAGE_KEYS.CHAT_MESSAGES,
-        serializeMessagesForStorage(messages)
-      );
-    };
+    const persistChatOnExit = () => persistChatMessages(messages);
     window.addEventListener('pagehide', persistChatOnExit);
     window.addEventListener('beforeunload', persistChatOnExit);
     return () => {
@@ -353,7 +364,8 @@ export function App() {
         agentConfig,
         files: activeProject.files,
         manifestConfig: activeProject.manifestConfig,
-        firebaseConfig
+        firebaseConfig,
+        history: messages
       });
 
       const changedFiles: PendingFileChange[] = [];
@@ -419,20 +431,14 @@ export function App() {
   const handleAcceptPendingChanges = () => {
     if (!pendingChanges) return;
     updateActiveProjectFiles(pendingChanges.updatedFiles);
-    const applied = pendingChanges;
     setPendingChanges(null);
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `sys-accept-${Date.now()}`,
-        role: 'assistant',
-        agent: agentConfig.activeAgent,
-        agentLabel: 'Modifiche Confermate',
-        content: `✅ Modifiche applicate a ${applied.files.length} file (${applied.totalDeletedLines} righe cancellate, ${applied.totalAddedLines} aggiunte).`,
-        timestamp: new Date().toLocaleTimeString(),
-        modifiedFiles: applied.files.map((f) => f.path)
-      }
-    ]);
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.modifiedFiles || m.toolCalls
+          ? { ...m, modifiedFiles: undefined, toolCalls: undefined }
+          : m
+      )
+    );
   };
 
   const handleRejectPendingChanges = () => {
@@ -591,7 +597,10 @@ export function App() {
   );
 
   return (
-    <div className="flex flex-col h-full w-full bg-[#1e1e1e] text-[#cccccc] overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+    <div
+      style={{ paddingBottom: 'var(--keyboard-inset, 0px)' }}
+      className="flex flex-col h-full w-full bg-[#1e1e1e] text-[#cccccc] overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
+    >
       {/* Top Bar */}
       <TabletTopBar
         projects={projects}
@@ -707,6 +716,9 @@ export function App() {
                 onCreateFile={handleCreateFile}
                 onAskAgentAboutFile={handleAskAgentAboutFile}
                 agentModifiedFiles={agentModifiedFiles}
+                pendingFileChange={
+                  pendingChanges?.files.find((f) => f.path === activeFile?.path) || null
+                }
               />
             </div>
 
@@ -774,6 +786,9 @@ export function App() {
                 onCreateFile={handleCreateFile}
                 onAskAgentAboutFile={handleAskAgentAboutFile}
                 agentModifiedFiles={agentModifiedFiles}
+                pendingFileChange={
+                  pendingChanges?.files.find((f) => f.path === activeFile?.path) || null
+                }
               />
             </div>
 
@@ -797,6 +812,9 @@ export function App() {
                 onCreateFile={handleCreateFile}
                 onAskAgentAboutFile={handleAskAgentAboutFile}
                 agentModifiedFiles={agentModifiedFiles}
+                pendingFileChange={
+                  pendingChanges?.files.find((f) => f.path === activeFile?.path) || null
+                }
               />
             </div>
             <div className="md:col-span-6 h-full min-h-0 overflow-hidden">

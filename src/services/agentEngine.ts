@@ -1,6 +1,7 @@
 import {
   AgentConfig,
   AgentId,
+  AgentMessage,
   AgentToolCall,
   FirebaseConfig,
   ProjectFile,
@@ -111,12 +112,14 @@ function parseJsonPatch(
   rawText: string,
   currentFiles: ProjectFile[]
 ): { cleanedText: string; updatedFiles: ProjectFile[]; toolCalls: AgentToolCall[] } {
-  const match = rawText.match(/```json-patch\s*([\s\S]*?)```/);
+  const match =
+    rawText.match(/```json-patch\s*([\s\S]*?)```/) ||
+    rawText.match(/```json\s*(\{[\s\S]*?"files"\s*:[\s\S]*?\})\s*```/);
   if (!match) {
     return { cleanedText: rawText, updatedFiles: currentFiles, toolCalls: [] };
   }
 
-  const cleanedText = rawText.replace(/```json-patch\s*[\s\S]*?```/, '').trim();
+  const cleanedText = rawText.replace(match[0], '').trim();
   try {
     const parsed = JSON.parse(match[1]);
     if (!Array.isArray(parsed.files)) {
@@ -168,12 +171,61 @@ function parseJsonPatch(
   }
 }
 
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs = 60_000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new Error(
+        'Timeout della richiesta AI (60s). Riprova o seleziona un modello più veloce.'
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function buildConversationTurns(
+  history: AgentMessage[] | undefined,
+  currentPrompt: string
+): Array<{ role: 'user' | 'assistant'; content: string }> {
+  const turns: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  for (const msg of (history || []).slice(-16)) {
+    if (msg.role !== 'user' && msg.role !== 'assistant') continue;
+    const text = msg.content?.trim();
+    if (!text) continue;
+    if (turns.length === 0 && msg.role !== 'user') continue;
+    const prev = turns[turns.length - 1];
+    if (prev && prev.role === msg.role) {
+      prev.content = `${prev.content}\n\n${text}`;
+    } else {
+      turns.push({ role: msg.role, content: text });
+    }
+  }
+  const prev = turns[turns.length - 1];
+  if (prev && prev.role === 'user') {
+    prev.content = `${prev.content}\n\n${currentPrompt}`;
+  } else {
+    turns.push({ role: 'user', content: currentPrompt });
+  }
+  return turns;
+}
+
 async function callClaudeApi(
   prompt: string,
   config: AgentConfig,
-  files: ProjectFile[]
+  files: ProjectFile[],
+  history?: AgentMessage[]
 ): Promise<AgentExecutionResult> {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const turns = buildConversationTurns(history, prompt);
+  const res = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -185,7 +237,7 @@ async function callClaudeApi(
       model: config.claudeModel || 'claude-3-7-sonnet-latest',
       max_tokens: 4096,
       system: buildSystemPrompt('claude', files),
-      messages: [{ role: 'user', content: prompt }]
+      messages: turns
     })
   });
 
@@ -210,27 +262,27 @@ async function callGeminiAntigravityApi(
   prompt: string,
   config: AgentConfig,
   files: ProjectFile[],
-  agentMode: AgentId
+  agentMode: AgentId,
+  history?: AgentMessage[]
 ): Promise<AgentExecutionResult> {
   const rawModel = config.antigravityModel || 'gemini-3.8-flash';
   const model = rawModel.startsWith('gemini-2.5') ? 'gemini-3.8-flash' : rawModel;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(
     config.geminiApiKey.trim()
   )}`;
+  const turns = buildConversationTurns(history, prompt);
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       systemInstruction: {
         parts: [{ text: buildSystemPrompt(agentMode, files) }]
       },
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: prompt }]
-        }
-      ]
+      contents: turns.map((t) => ({
+        role: t.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: t.content }]
+      }))
     })
   });
 
@@ -262,8 +314,9 @@ export async function runAgentTask(params: {
   files: ProjectFile[];
   manifestConfig: PwaManifestConfig;
   firebaseConfig: FirebaseConfig;
+  history?: AgentMessage[];
 }): Promise<AgentExecutionResult> {
-  const { prompt, agentConfig, files, manifestConfig, firebaseConfig } = params;
+  const { prompt, agentConfig, files, manifestConfig, firebaseConfig, history } = params;
   const activeAgent = agentConfig.activeAgent;
 
   const hasClaude = Boolean(agentConfig.claudeApiKey.trim());
@@ -277,14 +330,16 @@ export async function runAgentTask(params: {
         agyPrompt,
         agentConfig,
         files,
-        'antigravity'
+        'antigravity',
+        history
       );
 
       const claudePrompt = `[Ruolo: Claude UI/Frontend Builder nello Swarm]\nAntigravity ha appena lavorato su questa richiesta:\n"${prompt}"\n\nRifinisci UI/UX touch, CSS, layout e codice interattivo sui file risultanti.`;
       const step2 = await callClaudeApi(
         claudePrompt,
         agentConfig,
-        step1.updatedFiles
+        step1.updatedFiles,
+        history
       );
 
       return {
@@ -298,21 +353,21 @@ export async function runAgentTask(params: {
     }
 
     if (hasGemini) {
-      return callGeminiAntigravityApi(prompt, agentConfig, files, 'swarm');
+      return callGeminiAntigravityApi(prompt, agentConfig, files, 'swarm', history);
     }
 
     if (hasClaude) {
-      const res = await callClaudeApi(prompt, agentConfig, files);
+      const res = await callClaudeApi(prompt, agentConfig, files, history);
       return { ...res, agentLabel: `Swarm (${res.agentLabel})` };
     }
   }
 
   // 2. Single Cloud Agent if user has configured its API key
   if (activeAgent === 'claude' && hasClaude) {
-    return callClaudeApi(prompt, agentConfig, files);
+    return callClaudeApi(prompt, agentConfig, files, history);
   }
   if (activeAgent === 'antigravity' && hasGemini) {
-    return callGeminiAntigravityApi(prompt, agentConfig, files, 'antigravity');
+    return callGeminiAntigravityApi(prompt, agentConfig, files, 'antigravity', history);
   }
 
   // 2. Built-in Autonomous Agent Engine (works immediately on tablet without requiring external keys)

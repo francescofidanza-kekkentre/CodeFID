@@ -8,7 +8,7 @@ import {
   Check,
   Copy
 } from 'lucide-react';
-import { ProjectFile } from '../types/ide';
+import { PendingFileChange, ProjectFile } from '../types/ide';
 import { renderFileIcon } from '../utils/fileHelpers';
 
 interface TouchCodeEditorProps {
@@ -19,6 +19,7 @@ interface TouchCodeEditorProps {
   onCreateFile: (path: string) => void;
   onAskAgentAboutFile: (agent: 'claude' | 'antigravity', file: ProjectFile) => void;
   agentModifiedFiles?: string[];
+  pendingFileChange?: PendingFileChange | null;
 }
 
 const TOUCH_KEYS = [
@@ -47,7 +48,8 @@ export const TouchCodeEditor: React.FC<TouchCodeEditorProps> = ({
   onUpdateFileContent,
   onCreateFile,
   onAskAgentAboutFile,
-  agentModifiedFiles = []
+  agentModifiedFiles = [],
+  pendingFileChange = null
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [copied, setCopied] = useState(false);
@@ -193,6 +195,19 @@ export const TouchCodeEditor: React.FC<TouchCodeEditorProps> = ({
           </div>
         )}
       </div>
+
+      {/* Pending AI Modification Notice */}
+      {pendingFileChange && (
+        <div className="px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/30 flex items-center justify-between gap-2 text-[11px] shrink-0">
+          <span className="text-amber-200 font-medium truncate">
+            Modifica AI in attesa di conferma: premi <strong>Accept</strong> nella chat per applicare.
+          </span>
+          <div className="flex items-center gap-1.5 font-mono font-semibold shrink-0">
+            <span className="text-rose-300">-{pendingFileChange.deletedLines}</span>
+            <span className="text-emerald-300">+{pendingFileChange.addedLines}</span>
+          </div>
+        </div>
+      )}
 
       {/* Tablet Quick-Keys Touch Bar */}
       {activeFile && (

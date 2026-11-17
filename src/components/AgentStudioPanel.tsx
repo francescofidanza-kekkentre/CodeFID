@@ -484,12 +484,10 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onFocus={(e) => {
-              const target = e.currentTarget;
+            onFocus={() => {
               setTimeout(() => {
-                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                target.scrollIntoView({ block: 'nearest' });
-              }, 250);
+                messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+              }, 200);
             }}
             placeholder="Chiedi a Claude/Antigravity (o usa !cmd per Bridge CLI)..."
             className="w-full bg-[#252526] text-[#cccccc] text-xs lg:text-[13px] rounded pl-3 pr-9 py-2.5 min-h-[42px] border border-[#3c3c3c] focus:outline-none focus:border-[#007acc]"
