@@ -99,6 +99,17 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
     try {
       const models = await fetchAvailableGeminiModels(agentConfig.geminiApiKey);
       setGeminiModels(models);
+      if (models.length > 0 && !models.some((m) => m.id === agentConfig.antigravityModel)) {
+        const preferred =
+          models.find((m) => m.id === 'gemini-4-hydrogen') ||
+          models.find((m) => m.id === 'gemini-4-argon') ||
+          models.find((m) => m.id === 'gemini-3.8-flash') ||
+          models[0];
+        onUpdateAgentConfig({
+          ...agentConfig,
+          antigravityModel: preferred.id
+        });
+      }
     } finally {
       setLoadingModels(false);
     }

@@ -23,14 +23,17 @@ export interface ModelOption {
 }
 
 export const DEFAULT_ANTIGRAVITY_MODELS: ModelOption[] = [
-  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
-  { id: 'gemini-3.8-pro', label: 'Gemini 3.8 Pro' }
+  { id: 'gemini-4-argon', label: 'Gemini 4 Argon' },
+  { id: 'gemini-4-hydrogen', label: 'Gemini 4 Hydrogen' },
+  { id: 'gemini-4-carbon', label: 'Gemini 4 Carbon' },
+  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' }
 ];
 
 export const CLAUDE_MODELS: ModelOption[] = [
-  { id: 'claude-3-7-sonnet-latest', label: 'Claude 3.7 Sonnet (Consigliato Coding)' },
-  { id: 'claude-3-5-sonnet-latest', label: 'Claude 3.5 Sonnet' },
-  { id: 'claude-3-5-haiku-latest', label: 'Claude 3.5 Haiku (Ultra-Fast)' }
+  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (Consigliato Coding)' },
+  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5' },
+  { id: 'claude-3-7-sonnet-latest', label: 'Claude 3.7 Sonnet' },
+  { id: 'claude-3-5-haiku-latest', label: 'Claude 3.5 Haiku (Fast)' }
 ];
 
 /**
@@ -64,6 +67,11 @@ export async function fetchAvailableGeminiModels(apiKey: string): Promise<ModelO
           typeof m?.name === 'string' &&
           m.name.includes('gemini') &&
           !m.name.includes('gemini-2.5') &&
+          !m.name.includes('-live') &&
+          !m.name.includes('-tts') &&
+          !m.name.includes('-image') &&
+          !m.name.includes('-audio') &&
+          !m.name.includes('embedding') &&
           Array.isArray(m.supportedGenerationMethods) &&
           m.supportedGenerationMethods.includes('generateContent')
       )
@@ -234,7 +242,7 @@ async function callClaudeApi(
       'anthropic-dangerous-direct-browser-access': 'true'
     },
     body: JSON.stringify({
-      model: config.claudeModel || 'claude-3-7-sonnet-latest',
+      model: config.claudeModel || 'claude-sonnet-5-5',
       max_tokens: 4096,
       system: buildSystemPrompt('claude', files),
       messages: turns
@@ -265,30 +273,58 @@ async function callGeminiAntigravityApi(
   agentMode: AgentId,
   history?: AgentMessage[]
 ): Promise<AgentExecutionResult> {
-  const rawModel = config.antigravityModel || 'gemini-3.8-flash';
-  const model = rawModel.startsWith('gemini-2.5') ? 'gemini-3.8-flash' : rawModel;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(
-    config.geminiApiKey.trim()
-  )}`;
+  const rawModel = config.antigravityModel || 'gemini-4-hydrogen';
+  const primaryModel = rawModel.startsWith('gemini-2.5') ? 'gemini-4-hydrogen' : rawModel;
+  const fallbackChain = [
+    primaryModel,
+    ...['gemini-4-hydrogen', 'gemini-4-argon', 'gemini-3.8-flash', 'gemini-4-carbon'].filter(
+      (m) => m !== primaryModel
+    )
+  ];
   const turns = buildConversationTurns(history, prompt);
-
-  const res = await fetchWithTimeout(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: buildSystemPrompt(agentMode, files) }]
-      },
-      contents: turns.map((t) => ({
-        role: t.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: t.content }]
-      }))
-    })
+  const requestBody = JSON.stringify({
+    systemInstruction: {
+      parts: [{ text: buildSystemPrompt(agentMode, files) }]
+    },
+    contents: turns.map((t) => ({
+      role: t.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: t.content }]
+    }))
   });
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Errore API Antigravity/Gemini (${res.status}): ${errText.slice(0, 180)}`);
+  let usedModel = primaryModel;
+  let res: Response | null = null;
+  let lastErrorText = '';
+  let lastStatus = 0;
+
+  for (const candidate of fallbackChain) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${candidate}:generateContent?key=${encodeURIComponent(
+      config.geminiApiKey.trim()
+    )}`;
+    res = await fetchWithTimeout(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: requestBody
+    });
+    if (res.ok) {
+      usedModel = candidate;
+      break;
+    }
+    lastStatus = res.status;
+    lastErrorText = await res.text();
+    // Try next model only on transient overload (503) or unavailable model (404)
+    if (res.status !== 503 && res.status !== 404) {
+      break;
+    }
+  }
+
+  if (!res || !res.ok) {
+    if (lastStatus === 503) {
+      throw new Error(
+        `I modelli Gemini sono temporaneamente sovraccarichi (503). Riprova tra qualche secondo.`
+      );
+    }
+    throw new Error(`Errore API Antigravity/Gemini (${lastStatus}): ${lastErrorText.slice(0, 180)}`);
   }
 
   const data = await res.json();
@@ -302,7 +338,7 @@ async function callGeminiAntigravityApi(
     agentLabel:
       agentMode === 'swarm'
         ? 'Swarm (Antigravity + Claude)'
-        : `Antigravity (${model})`,
+        : `Antigravity (${usedModel})`,
     toolCalls,
     updatedFiles
   };

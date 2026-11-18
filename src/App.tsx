@@ -104,15 +104,19 @@ export function App() {
     const loaded = loadStoredJson<AgentConfig>(STORAGE_KEYS.AGENT_CFG, {
       activeAgent: 'antigravity',
       claudeApiKey: '',
-      claudeModel: 'claude-3-7-sonnet-latest',
+      claudeModel: 'claude-sonnet-5-5',
       geminiApiKey: '',
-      antigravityModel: 'gemini-3.8-flash',
+      antigravityModel: 'gemini-4-hydrogen',
       bridgeUrl: 'http://localhost:8787',
       bridgeConnected: false,
       autoApplyChanges: true
     });
-    if (!loaded.antigravityModel || loaded.antigravityModel.startsWith('gemini-2.5')) {
-      loaded.antigravityModel = 'gemini-3.8-flash';
+    if (
+      !loaded.antigravityModel ||
+      loaded.antigravityModel.startsWith('gemini-2.5') ||
+      loaded.antigravityModel === 'gemini-3.8-pro'
+    ) {
+      loaded.antigravityModel = 'gemini-4-hydrogen';
     }
     return loaded;
   });
