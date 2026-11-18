@@ -45,6 +45,7 @@ export const CommitModal: React.FC<CommitModalProps> = ({
   const [loadingAction, setLoadingAction] = useState<'commit' | 'sync' | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [sessionCompleted, setSessionCompleted] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -52,6 +53,7 @@ export const CommitModal: React.FC<CommitModalProps> = ({
       setStatusMsg(null);
       setErrorMsg(null);
       setLoadingAction(null);
+      setSessionCompleted(false);
     }
   }, [isOpen]);
 
@@ -96,6 +98,7 @@ export const CommitModal: React.FC<CommitModalProps> = ({
         `Commit "${trimmedCommitName}" completato! ${res.committedCount} file caricati su ${githubConfig.selectedRepo}.`
       );
       setCommitName('');
+      setSessionCompleted(true);
     } catch (err: any) {
       setErrorMsg(err.message || 'Errore durante il commit su GitHub.');
     } finally {
@@ -251,7 +254,7 @@ export const CommitModal: React.FC<CommitModalProps> = ({
                     : 'border-amber-500/50 focus:border-amber-400'
                 }`}
               />
-              {!hasCommitName && (
+              {!hasCommitName && !sessionCompleted && (
                 <p className="text-[11px] text-amber-300/90">
                   Inserisci il nome del commit per abilitare l&apos;invio su GitHub.
                 </p>
@@ -261,6 +264,7 @@ export const CommitModal: React.FC<CommitModalProps> = ({
             <button
               type="submit"
               disabled={
+                sessionCompleted ||
                 !hasCommitName ||
                 !isGitHubReady ||
                 activeProject.files.length === 0 ||
@@ -295,7 +299,7 @@ export const CommitModal: React.FC<CommitModalProps> = ({
             <button
               type="button"
               onClick={handleSync}
-              disabled={!isGitHubReady || loadingAction !== null}
+              disabled={sessionCompleted || !isGitHubReady || loadingAction !== null}
               className="w-full py-2.5 px-4 rounded-xl bg-[#2a2d2e] hover:bg-[#373b3d] disabled:opacity-40 disabled:cursor-not-allowed border border-[#3c3c3c] text-[#e0e0e0] text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition"
             >
               {loadingAction === 'sync' ? (
@@ -319,6 +323,17 @@ export const CommitModal: React.FC<CommitModalProps> = ({
               <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
               <span>{errorMsg}</span>
             </div>
+          )}
+
+          {sessionCompleted && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full py-2.5 px-4 rounded-xl bg-[#007acc] hover:bg-[#1f8ad2] text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 shadow-sm transition"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Chiudi sessione git</span>
+            </button>
           )}
         </div>
       </div>

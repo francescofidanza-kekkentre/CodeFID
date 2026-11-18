@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FileCode2,
   Plus,
@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { PendingFileChange, ProjectFile } from '../types/ide';
 import { renderFileIcon } from '../utils/fileHelpers';
+import { renderHighlightedCode } from '../utils/syntaxHighlight';
 
 interface TouchCodeEditorProps {
   files: ProjectFile[];
@@ -52,10 +53,33 @@ export const TouchCodeEditor: React.FC<TouchCodeEditorProps> = ({
   pendingFileChange = null
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const gutterRef = useRef<HTMLDivElement | null>(null);
+  const preRef = useRef<HTMLPreElement | null>(null);
   const [copied, setCopied] = useState(false);
 
   const activeFile = files.find((f) => f.path === activeFilePath) || files[0];
   const lines = (activeFile?.content || '').split('\n');
+
+  const highlightedCode = useMemo(
+    () =>
+      renderHighlightedCode(
+        activeFile?.content || '',
+        activeFile?.language || 'javascript'
+      ),
+    [activeFile?.content, activeFile?.language]
+  );
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      if (gutterRef.current) {
+        gutterRef.current.scrollTop = textareaRef.current.scrollTop;
+      }
+      if (preRef.current) {
+        preRef.current.scrollTop = textareaRef.current.scrollTop;
+        preRef.current.scrollLeft = textareaRef.current.scrollLeft;
+      }
+    }
+  }, [activeFile?.path, lines.length]);
 
   const handleInsertSymbol = (snippet: string) => {
     const el = textareaRef.current;
@@ -232,32 +256,54 @@ export const TouchCodeEditor: React.FC<TouchCodeEditorProps> = ({
         <div className="relative flex-1 flex overflow-hidden font-mono text-xs lg:text-[13px] leading-6">
           {/* Line Numbers Gutter */}
           <div
+            ref={gutterRef}
             aria-hidden="true"
-            className="w-11 py-3 bg-[#1e1e1e] text-[#858585] text-right pr-2.5 select-none border-r border-[#2b2b2b] overflow-hidden shrink-0"
+            className="w-11 py-3 pb-8 bg-[#1e1e1e] text-[#858585] text-right pr-2.5 select-none border-r border-[#2b2b2b] overflow-hidden shrink-0"
           >
             {lines.map((_, idx) => (
               <div key={idx}>{idx + 1}</div>
             ))}
           </div>
 
-          {/* Editable Textarea */}
-          <textarea
-            ref={textareaRef}
-            value={activeFile.content}
-            onChange={(e) => onUpdateFileContent(activeFile.path, e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Tab') {
-                e.preventDefault();
-                handleInsertSymbol('  ');
-              }
-            }}
-            spellCheck={false}
-            autoCapitalize="off"
-            autoComplete="off"
-            autoCorrect="off"
-            className="flex-1 w-full h-full p-3 bg-[#1e1e1e] text-[#d4d4d4] font-mono text-xs lg:text-[13px] leading-6 resize-none focus:outline-none overflow-auto selection:bg-[#264f78]"
-            placeholder="Scrivi codice qui o chiedi a Claude / Antigravity..."
-          />
+          {/* Syntax Highlighted Code + Editable Transparent Textarea Overlay */}
+          <div className="relative flex-1 h-full overflow-hidden bg-[#1e1e1e]">
+            <pre
+              ref={preRef}
+              aria-hidden="true"
+              className="absolute inset-0 m-0 p-3 pb-8 font-mono text-xs lg:text-[13px] leading-6 whitespace-pre text-[#d4d4d4] overflow-hidden pointer-events-none select-none"
+            >
+              {highlightedCode}
+              {activeFile.content.endsWith('\n') ? ' ' : ''}
+            </pre>
+
+            <textarea
+              ref={textareaRef}
+              value={activeFile.content}
+              onChange={(e) => onUpdateFileContent(activeFile.path, e.target.value)}
+              onScroll={(e) => {
+                if (gutterRef.current) {
+                  gutterRef.current.scrollTop = e.currentTarget.scrollTop;
+                }
+                if (preRef.current) {
+                  preRef.current.scrollTop = e.currentTarget.scrollTop;
+                  preRef.current.scrollLeft = e.currentTarget.scrollLeft;
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Tab') {
+                  e.preventDefault();
+                  handleInsertSymbol('  ');
+                }
+              }}
+              wrap="off"
+              spellCheck={false}
+              autoCapitalize="off"
+              autoComplete="off"
+              autoCorrect="off"
+              className="relative z-10 w-full h-full p-3 pb-8 bg-transparent text-transparent caret-white font-mono text-xs lg:text-[13px] leading-6 whitespace-pre resize-none focus:outline-none overflow-auto selection:bg-[#264f78]/70"
+              placeholder="Scrivi codice qui o chiedi a Claude / Antigravity..."
+            />
+          </div>
         </div>
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-[#858585]">
