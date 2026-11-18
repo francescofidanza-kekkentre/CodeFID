@@ -91,8 +91,15 @@ export async function fetchAvailableGeminiModels(apiKey: string): Promise<ModelO
 }
 
 function buildSystemPrompt(agent: AgentId, files: ProjectFile[]): string {
+  const MAX_FILE_CHARS = 18_000;
   const fileContext = files
-    .map((f) => `--- FILE: ${f.path} ---\n${f.content}`)
+    .map((f) => {
+      const content =
+        f.content.length > MAX_FILE_CHARS
+          ? `${f.content.slice(0, 12_000)}\n/* ... [${f.path} troncato per limite token: ${f.content.length} caratteri totali] ... */`
+          : f.content;
+      return `--- FILE: ${f.path} ---\n${content}`;
+    })
     .join('\n\n');
 
   const roleHeader =
@@ -205,10 +212,11 @@ function buildConversationTurns(
   currentPrompt: string
 ): Array<{ role: 'user' | 'assistant'; content: string }> {
   const turns: Array<{ role: 'user' | 'assistant'; content: string }> = [];
-  for (const msg of (history || []).slice(-16)) {
+  for (const msg of (history || []).slice(-8)) {
     if (msg.role !== 'user' && msg.role !== 'assistant') continue;
-    const text = msg.content?.trim();
-    if (!text) continue;
+    const raw = msg.content?.trim();
+    if (!raw) continue;
+    const text = raw.length > 1500 ? `${raw.slice(0, 1500)}...` : raw;
     if (turns.length === 0 && msg.role !== 'user') continue;
     const prev = turns[turns.length - 1];
     if (prev && prev.role === msg.role) {
@@ -277,7 +285,7 @@ async function callGeminiAntigravityApi(
   const primaryModel = rawModel.startsWith('gemini-2.5') ? 'gemini-4-hydrogen' : rawModel;
   const fallbackChain = [
     primaryModel,
-    ...['gemini-4-hydrogen', 'gemini-4-argon', 'gemini-3.8-flash', 'gemini-4-carbon'].filter(
+    ...['gemini-3.8-flash', 'gemini-4-hydrogen', 'gemini-4-argon', 'gemini-4-carbon'].filter(
       (m) => m !== primaryModel
     )
   ];
@@ -312,13 +320,18 @@ async function callGeminiAntigravityApi(
     }
     lastStatus = res.status;
     lastErrorText = await res.text();
-    // Try next model only on transient overload (503) or unavailable model (404)
-    if (res.status !== 503 && res.status !== 404) {
+    // Try next model on quota/rate-limit (429), overload (503), or unavailable model (404)
+    if (res.status !== 429 && res.status !== 503 && res.status !== 404) {
       break;
     }
   }
 
   if (!res || !res.ok) {
+    if (lastStatus === 429) {
+      throw new Error(
+        `Quota API Gemini esaurita (429) sulla tua API Key di Google AI Studio (nota: è separata dalla quota di VS Code/Antigravity). Verifica il piano/limite su aistudio.google.com oppure usa il motore integrato.`
+      );
+    }
     if (lastStatus === 503) {
       throw new Error(
         `I modelli Gemini sono temporaneamente sovraccarichi (503). Riprova tra qualche secondo.`
