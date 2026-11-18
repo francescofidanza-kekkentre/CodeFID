@@ -118,6 +118,7 @@ Se l'utente chiede di creare o modificare codice della PWA, oltre alla spiegazio
   ],
   "summary": "Breve descrizione della modifica"
 }
+Includi in "files" SOLO i file effettivamente modificati o creati (non ripetere i file invariati).
 
 File attuali del progetto:
 ${fileContext}`;
@@ -189,7 +190,7 @@ function parseJsonPatch(
 async function fetchWithTimeout(
   url: string,
   options: RequestInit,
-  timeoutMs = 60_000
+  timeoutMs = 150_000
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -198,13 +199,56 @@ async function fetchWithTimeout(
   } catch (err: any) {
     if (err?.name === 'AbortError') {
       throw new Error(
-        'Timeout della richiesta AI (60s). Riprova o seleziona un modello più veloce.'
+        'Timeout della richiesta AI (150s). Riprova o seleziona un modello più veloce (es. Gemini 3.8 Flash).'
       );
     }
     throw err;
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function readGeminiSseText(res: Response): Promise<string> {
+  const contentType = res.headers.get('content-type') || '';
+  if (!res.body || contentType.includes('application/json')) {
+    const data = await res.json();
+    return (
+      data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('\n') ||
+      'Risposta elaborata da Antigravity.'
+    );
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  const chunks: string[] = [];
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data:')) continue;
+      const jsonStr = trimmed.slice(5).trim();
+      if (!jsonStr || jsonStr === '[DONE]') continue;
+      try {
+        const parsed = JSON.parse(jsonStr);
+        const parts = parsed?.candidates?.[0]?.content?.parts;
+        if (Array.isArray(parts)) {
+          for (const p of parts) {
+            if (typeof p?.text === 'string') chunks.push(p.text);
+          }
+        }
+      } catch {
+        // Ignore partial SSE JSON chunks
+      }
+    }
+  }
+
+  return chunks.join('') || 'Risposta elaborata da Antigravity.';
 }
 
 function buildConversationTurns(
@@ -297,7 +341,10 @@ async function callGeminiAntigravityApi(
     contents: turns.map((t) => ({
       role: t.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: t.content }]
-    }))
+    })),
+    generationConfig: {
+      maxOutputTokens: 16384
+    }
   });
 
   let usedModel = primaryModel;
@@ -306,7 +353,7 @@ async function callGeminiAntigravityApi(
   let lastStatus = 0;
 
   for (const candidate of fallbackChain) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${candidate}:generateContent?key=${encodeURIComponent(
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${candidate}:streamGenerateContent?alt=sse&key=${encodeURIComponent(
       config.geminiApiKey.trim()
     )}`;
     res = await fetchWithTimeout(url, {
@@ -340,10 +387,7 @@ async function callGeminiAntigravityApi(
     throw new Error(`Errore API Antigravity/Gemini (${lastStatus}): ${lastErrorText.slice(0, 180)}`);
   }
 
-  const data = await res.json();
-  const rawReply =
-    data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('\n') ||
-    'Risposta elaborata da Antigravity.';
+  const rawReply = await readGeminiSseText(res);
   const { cleanedText, updatedFiles, toolCalls } = parseJsonPatch(rawReply, files);
 
   return {
