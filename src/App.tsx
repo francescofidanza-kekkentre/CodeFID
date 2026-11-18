@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AgentConfig,
   AgentId,
@@ -17,7 +17,7 @@ import {
   generateManifestJson,
   generateServiceWorkerJs
 } from './services/pwaPreview';
-import { runAgentTask } from './services/agentEngine';
+import { AgentCancelledError, runAgentTask } from './services/agentEngine';
 import {
   computeLineDiffStats,
   detectFileLanguage,
@@ -107,6 +107,7 @@ export function App() {
       claudeModel: 'claude-sonnet-5-5',
       geminiApiKey: '',
       antigravityModel: 'gemini-4-hydrogen',
+      agentLevel: 'medium',
       bridgeUrl: 'http://localhost:8787',
       bridgeConnected: false,
       autoApplyChanges: true
@@ -117,6 +118,9 @@ export function App() {
       loaded.antigravityModel === 'gemini-3.8-pro'
     ) {
       loaded.antigravityModel = 'gemini-4-hydrogen';
+    }
+    if (!loaded.agentLevel) {
+      loaded.agentLevel = 'medium';
     }
     return loaded;
   });
@@ -162,6 +166,8 @@ export function App() {
 
   // Agent Conversation History (persisted locally across restarts)
   const [isAgentRunning, setIsAgentRunning] = useState(false);
+  const agentAbortRef = useRef<AbortController | null>(null);
+  const agentRunLockRef = useRef(false);
   const [messages, setMessages] = useState<AgentMessage[]>(() =>
     loadStoredJson<AgentMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, [])
   );
@@ -351,20 +357,33 @@ export function App() {
 
   // Send Prompt to Active AI Agent
   const handleSendAgentPrompt = async (prompt: string) => {
+    const trimmedPrompt = prompt.trim();
+    if (!trimmedPrompt || agentRunLockRef.current) return;
+    agentRunLockRef.current = true;
+
+    const controller = new AbortController();
+    agentAbortRef.current = controller;
+
+    // Baseline for diffs = real saved files; working set = files incl. not-yet-accepted changes,
+    // so consecutive prompts build on top of pending modifications instead of discarding them.
     const snapshot = activeProject.files.map((f) => ({ ...f }));
+    const workingFiles = pendingChanges ? pendingChanges.updatedFiles : activeProject.files;
     const now = Date.now();
     const userMsg: AgentMessage = {
       id: `user-${now}`,
       role: 'user',
       agent: agentConfig.activeAgent,
-      content: prompt,
+      content: trimmedPrompt,
       timestamp: new Date().toLocaleTimeString()
     };
     const streamingMsgId = `ai-${now}`;
+    let lastPartial = '';
     setMessages((prev) => [...prev, userMsg]);
     setIsAgentRunning(true);
 
     const upsertStreamingMessage = (partialText: string) => {
+      if (controller.signal.aborted) return;
+      lastPartial = partialText;
       setMessages((prev) => {
         const exists = prev.some((m) => m.id === streamingMsgId);
         if (exists) {
@@ -393,14 +412,17 @@ export function App() {
 
     try {
       const result = await runAgentTask({
-        prompt,
+        prompt: trimmedPrompt,
         agentConfig,
-        files: activeProject.files,
+        files: workingFiles,
         manifestConfig: activeProject.manifestConfig,
         firebaseConfig,
         history: messages,
-        onPartialText: upsertStreamingMessage
+        onPartialText: upsertStreamingMessage,
+        signal: controller.signal
       });
+
+      if (controller.signal.aborted) throw new AgentCancelledError();
 
       const changedFiles: PendingFileChange[] = [];
       for (const nextFile of result.updatedFiles) {
@@ -451,12 +473,16 @@ export function App() {
           : [...prev, finalMsg];
       });
     } catch (err: any) {
+      const cancelled = err instanceof AgentCancelledError || controller.signal.aborted;
+      const partialText = lastPartial.replace(/\n*⏳.*$/s, '').trim();
       const errMsg: AgentMessage = {
         id: streamingMsgId,
         role: 'assistant',
         agent: agentConfig.activeAgent,
-        agentLabel: 'Errore Agente',
-        content: err.message || 'Errore durante l’esecuzione del task AI.',
+        agentLabel: cancelled ? 'Interrotto' : 'Errore Agente',
+        content: cancelled
+          ? `${partialText ? `${partialText}\n\n` : ''}⏹ Generazione interrotta. Nessun file è stato modificato.`
+          : `⚠️ ${err?.message || 'Errore durante l’esecuzione del task AI.'}`,
         timestamp: new Date().toLocaleTimeString()
       };
       setMessages((prev) => {
@@ -466,8 +492,14 @@ export function App() {
           : [...prev, errMsg];
       });
     } finally {
+      if (agentAbortRef.current === controller) agentAbortRef.current = null;
+      agentRunLockRef.current = false;
       setIsAgentRunning(false);
     }
+  };
+
+  const handleStopAgent = () => {
+    agentAbortRef.current?.abort();
   };
 
   const handleAcceptPendingChanges = () => {

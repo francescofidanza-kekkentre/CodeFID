@@ -21,6 +21,7 @@ import {
   AgentConfig,
   AgentId,
   AgentMessage,
+  ModelLevel,
   PendingAgentChanges,
   ProjectFile
 } from '../types/ide';
@@ -124,6 +125,19 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
   const effectiveGeminiModels = geminiModels.some((m) => m.id === agentConfig.antigravityModel)
     ? geminiModels
     : [{ id: agentConfig.antigravityModel, label: agentConfig.antigravityModel }, ...geminiModels];
+
+  const activeLevelCapitalized =
+    (agentConfig.agentLevel || 'medium').charAt(0).toUpperCase() +
+    (agentConfig.agentLevel || 'medium').slice(1);
+
+  const activeModelDisplayName =
+    agentConfig.activeAgent === 'antigravity'
+      ? effectiveGeminiModels.find((m) => m.id === agentConfig.antigravityModel)?.label ||
+        agentConfig.antigravityModel
+      : agentConfig.activeAgent === 'claude'
+      ? CLAUDE_MODELS.find((m) => m.id === agentConfig.claudeModel)?.label ||
+        agentConfig.claudeModel
+      : 'Swarm (AGY + Claude)';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -284,6 +298,36 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
               </select>
             </div>
           )}
+
+          {/* Level Selector (Low, Medium, High) */}
+          <div className="flex items-center gap-1 bg-[#252526] border border-[#3c3c3c] rounded px-1.5 py-0.5 shrink-0 ml-auto">
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-[#858585] pr-0.5">
+              Livello
+            </span>
+            {(['low', 'medium', 'high'] as const).map((lvl) => {
+              const active = (agentConfig.agentLevel || 'medium') === lvl;
+              return (
+                <button
+                  key={lvl}
+                  type="button"
+                  onClick={() =>
+                    onUpdateAgentConfig({
+                      ...agentConfig,
+                      agentLevel: lvl
+                    })
+                  }
+                  className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition capitalize ${
+                    active
+                      ? 'bg-[#007acc] text-white font-semibold shadow-xs'
+                      : 'text-[#858585] hover:text-[#cccccc] hover:bg-[#2a2d2e]'
+                  }`}
+                  title={`Livello di ragionamento / thinking effort: ${lvl.toUpperCase()}`}
+                >
+                  {lvl === 'low' ? 'Low' : lvl === 'medium' ? 'Medium' : 'High'}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -487,10 +531,48 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
         ))}
       </div>
 
+      {/* Model & Thinking Level status pill (Antigravity VS Code style) */}
+      <div className="px-2.5 py-1 bg-[#181818] border-t border-[#2b2b2b] flex items-center justify-between text-[11px] shrink-0">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[#3794ff] font-semibold text-xs shrink-0">+</span>
+          <span className="text-[#cccccc] font-medium truncate max-w-[200px]">
+            {activeModelDisplayName}
+          </span>
+          <span className="px-1.5 py-0.2 rounded bg-[#252526] border border-[#3c3c3c] text-[10px] font-semibold text-sky-400 shrink-0">
+            {activeLevelCapitalized}
+          </span>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {(['low', 'medium', 'high'] as const).map((lvl) => {
+            const active = (agentConfig.agentLevel || 'medium') === lvl;
+            return (
+              <button
+                key={lvl}
+                type="button"
+                onClick={() =>
+                  onUpdateAgentConfig({
+                    ...agentConfig,
+                    agentLevel: lvl
+                  })
+                }
+                className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition ${
+                  active
+                    ? 'bg-[#007acc] text-white font-semibold shadow-xs'
+                    : 'text-[#858585] hover:text-[#cccccc] hover:bg-[#252526]'
+                }`}
+                title={`Imposta livello: ${lvl.toUpperCase()}`}
+              >
+                {lvl === 'low' ? 'Low' : lvl === 'medium' ? 'Med' : 'High'}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Prompt Input Form */}
       <form
         onSubmit={handleSubmit}
-        className="p-2.5 bg-[#181818] border-t border-[#2b2b2b] flex items-center gap-2 shrink-0"
+        className="p-2.5 pt-1.5 bg-[#181818] flex items-center gap-2 shrink-0"
       >
         <div className="relative flex-1">
           <input

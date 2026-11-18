@@ -30,6 +30,7 @@ export interface PwaProject {
 }
 
 export type AgentId = 'antigravity' | 'claude' | 'swarm';
+export type ModelLevel = 'low' | 'medium' | 'high';
 
 export interface AgentToolCall {
   id: string;
@@ -74,6 +75,7 @@ export interface AgentConfig {
   claudeModel: string;
   geminiApiKey: string;
   antigravityModel: string;
+  agentLevel?: ModelLevel;
   bridgeUrl: string;
   bridgeConnected: boolean;
   autoApplyChanges: boolean;

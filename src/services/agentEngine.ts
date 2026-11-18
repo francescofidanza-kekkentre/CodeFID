@@ -4,6 +4,7 @@ import {
   AgentMessage,
   AgentToolCall,
   FirebaseConfig,
+  ModelLevel,
   ProjectFile,
   PwaManifestConfig
 } from '../types/ide';
@@ -35,6 +36,36 @@ export const CLAUDE_MODELS: ModelOption[] = [
   { id: 'claude-3-7-sonnet-latest', label: 'Claude 3.7 Sonnet' },
   { id: 'claude-3-5-haiku-latest', label: 'Claude 3.5 Haiku (Fast)' }
 ];
+
+export function getLevelDisplayName(level?: ModelLevel): string {
+  if (level === 'low') return 'Low';
+  if (level === 'high') return 'High';
+  return 'Medium';
+}
+
+export function getGeminiThinkingBudget(level?: ModelLevel): number {
+  switch (level) {
+    case 'low':
+      return 1024;
+    case 'high':
+      return 16384;
+    case 'medium':
+    default:
+      return 4096;
+  }
+}
+
+export function getClaudeThinkingBudget(level?: ModelLevel): number {
+  switch (level) {
+    case 'low':
+      return 2048;
+    case 'high':
+      return 8192;
+    case 'medium':
+    default:
+      return 4096;
+  }
+}
 
 /**
  * Fetches all available Gemini models supporting generateContent for the given API key
@@ -612,6 +643,7 @@ async function callClaudeApi(
   options: AgentRunOptions = {}
 ): Promise<AgentExecutionResult> {
   const model = config.claudeModel || 'claude-sonnet-5-5';
+  const levelName = getLevelDisplayName(config.agentLevel);
   const turns = buildConversationTurns(history, prompt);
   const requestInit: RequestInit = {
     method: 'POST',
@@ -652,7 +684,7 @@ async function callClaudeApi(
 
   return {
     replyText: cleanedText,
-    agentLabel: `Claude (${model})`,
+    agentLabel: `Claude (${model} ${levelName})`,
     toolCalls,
     updatedFiles
   };
@@ -668,6 +700,8 @@ async function callGeminiAntigravityApi(
 ): Promise<AgentExecutionResult> {
   const rawModel = config.antigravityModel || 'gemini-4-hydrogen';
   const primaryModel = rawModel.startsWith('gemini-2.5') ? 'gemini-4-hydrogen' : rawModel;
+  const levelName = getLevelDisplayName(config.agentLevel);
+  const thinkingBudget = getGeminiThinkingBudget(config.agentLevel);
   const fallbackChain = [
     primaryModel,
     ...['gemini-3.8-flash', 'gemini-4-hydrogen', 'gemini-4-argon'].filter(
@@ -675,18 +709,27 @@ async function callGeminiAntigravityApi(
     )
   ];
   const turns = buildConversationTurns(history, prompt);
-  const requestBody = JSON.stringify({
-    systemInstruction: {
-      parts: [{ text: buildSystemPrompt(agentMode, files) }]
-    },
-    contents: turns.map((t) => ({
-      role: t.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: t.content }]
-    })),
-    generationConfig: {
+
+  const buildRequestBody = (withThinking: boolean) => {
+    const generationConfig: Record<string, any> = {
       maxOutputTokens: 32768
+    };
+    if (withThinking) {
+      generationConfig.thinkingConfig = {
+        thinkingBudget
+      };
     }
-  });
+    return JSON.stringify({
+      systemInstruction: {
+        parts: [{ text: buildSystemPrompt(agentMode, files) }]
+      },
+      contents: turns.map((t) => ({
+        role: t.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: t.content }]
+      })),
+      generationConfig
+    });
+  };
 
   let usedModel = primaryModel;
   let res: Response | null = null;
@@ -699,11 +742,24 @@ async function callGeminiAntigravityApi(
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${candidate}:streamGenerateContent?alt=sse&key=${encodeURIComponent(
       config.geminiApiKey.trim()
     )}`;
+    // First try with thinkingConfig
     res = await fetchWithRetry(
       url,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: requestBody },
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: buildRequestBody(true) },
       options.signal
     );
+    // If rejected with 400 (e.g. model doesn't support thinkingConfig), retry without thinkingConfig
+    if (!res.ok && res.status === 400) {
+      const errClone = res.clone();
+      const errBody = await errClone.text().catch(() => '');
+      if (/thinking|unknown field|invalid argument/i.test(errBody)) {
+        res = await fetchWithRetry(
+          url,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: buildRequestBody(false) },
+          options.signal
+        );
+      }
+    }
     if (res.ok) {
       usedModel = candidate;
       break;
@@ -746,8 +802,8 @@ async function callGeminiAntigravityApi(
     replyText: cleanedText + fallbackNote,
     agentLabel:
       agentMode === 'swarm'
-        ? 'Swarm (Antigravity + Claude)'
-        : `Antigravity (${usedModel})`,
+        ? `Swarm (Antigravity ${levelName} + Claude)`
+        : `Antigravity (${usedModel} ${levelName})`,
     toolCalls,
     updatedFiles
   };
@@ -761,8 +817,11 @@ export async function runAgentTask(params: {
   firebaseConfig: FirebaseConfig;
   history?: AgentMessage[];
   onPartialText?: (partialText: string) => void;
+  signal?: AbortSignal;
 }): Promise<AgentExecutionResult> {
-  const { prompt, agentConfig, files, manifestConfig, firebaseConfig, history, onPartialText } = params;
+  const { prompt, agentConfig, files, manifestConfig, firebaseConfig, history, onPartialText, signal } =
+    params;
+  const runOptions: AgentRunOptions = { onPartialText, signal };
   const activeAgent = agentConfig.activeAgent;
 
   const hasClaude = Boolean(agentConfig.claudeApiKey.trim());
@@ -778,50 +837,49 @@ export async function runAgentTask(params: {
         files,
         'antigravity',
         history,
-        onPartialText
+        {
+          signal,
+          onPartialText: onPartialText
+            ? (t) => onPartialText(`### 1. Antigravity\n${t}`)
+            : undefined
+        }
       );
 
       const claudePrompt = `[Ruolo: Claude UI/Frontend Builder nello Swarm]\nAntigravity ha appena lavorato su questa richiesta:\n"${prompt}"\n\nRifinisci UI/UX touch, CSS, layout e codice interattivo sui file risultanti.`;
-      const step2 = await callClaudeApi(
-        claudePrompt,
-        agentConfig,
-        step1.updatedFiles,
-        history
-      );
+      const levelName = getLevelDisplayName(agentConfig.agentLevel);
+      const step1Header = `### 1. Antigravity (${agentConfig.antigravityModel || 'Gemini'} ${levelName})\n${step1.replyText}\n\n---\n\n`;
+      const step2 = await callClaudeApi(claudePrompt, agentConfig, step1.updatedFiles, history, {
+        signal,
+        onPartialText: onPartialText
+          ? (t) => onPartialText(`${step1Header}### 2. Claude\n${t}`)
+          : undefined
+      });
 
       return {
         replyText:
-          `### 1. Antigravity (${agentConfig.antigravityModel || 'Gemini'})\n${step1.replyText}\n\n---\n\n` +
-          `### 2. Claude (${agentConfig.claudeModel || 'Sonnet'})\n${step2.replyText}`,
-        agentLabel: 'Swarm (Antigravity + Claude)',
+          step1Header + `### 2. Claude (${agentConfig.claudeModel || 'Sonnet'} ${levelName})\n${step2.replyText}`,
+        agentLabel: `Swarm (Antigravity + Claude ${levelName})`,
         toolCalls: [...step1.toolCalls, ...step2.toolCalls],
         updatedFiles: step2.updatedFiles
       };
     }
 
     if (hasGemini) {
-      return callGeminiAntigravityApi(prompt, agentConfig, files, 'swarm', history, onPartialText);
+      return callGeminiAntigravityApi(prompt, agentConfig, files, 'swarm', history, runOptions);
     }
 
     if (hasClaude) {
-      const res = await callClaudeApi(prompt, agentConfig, files, history);
+      const res = await callClaudeApi(prompt, agentConfig, files, history, runOptions);
       return { ...res, agentLabel: `Swarm (${res.agentLabel})` };
     }
   }
 
   // 2. Single Cloud Agent if user has configured its API key
   if (activeAgent === 'claude' && hasClaude) {
-    return callClaudeApi(prompt, agentConfig, files, history);
+    return callClaudeApi(prompt, agentConfig, files, history, runOptions);
   }
   if (activeAgent === 'antigravity' && hasGemini) {
-    return callGeminiAntigravityApi(
-      prompt,
-      agentConfig,
-      files,
-      'antigravity',
-      history,
-      onPartialText
-    );
+    return callGeminiAntigravityApi(prompt, agentConfig, files, 'antigravity', history, runOptions);
   }
 
   // 2. Built-in Autonomous Agent Engine (works immediately on tablet without requiring external keys)

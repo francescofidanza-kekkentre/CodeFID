@@ -21,6 +21,7 @@ import {
   AgentConfig,
   FirebaseConfig,
   GitHubConfig,
+  ModelLevel,
   ProjectFile,
   PwaProject
 } from '../types/ide';
@@ -742,6 +743,51 @@ export const IntegrationsDrawer: React.FC<IntegrationsDrawerProps> = ({
                       ))}
                     </select>
                   </div>
+                </div>
+              </div>
+
+              {/* Model Thinking Level */}
+              <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-indigo-400" />
+                    <span className="font-bold text-sm text-white">
+                      Livello di Ragionamento / Thinking (Effort)
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-semibold uppercase px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300">
+                    {agentConfig.agentLevel || 'medium'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Controlla il budget di pensiero (thinking tokens) e l'approfondimento dell'analisi prima di applicare le modifiche (Low, Medium, High).
+                </p>
+                <div className="grid grid-cols-3 gap-2 pt-1">
+                  {(['low', 'medium', 'high'] as const).map((lvl) => {
+                    const active = (agentConfig.agentLevel || 'medium') === lvl;
+                    return (
+                      <button
+                        key={lvl}
+                        type="button"
+                        onClick={() =>
+                          onUpdateAgentConfig({
+                            ...agentConfig,
+                            agentLevel: lvl
+                          })
+                        }
+                        className={`p-2 rounded-lg border text-center transition ${
+                          active
+                            ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200 font-semibold'
+                            : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        <div className="text-xs font-semibold capitalize">{lvl}</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          {lvl === 'low' ? 'Veloce / Min budget' : lvl === 'medium' ? 'Bilanciato' : 'Profondo / Max budget'}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
