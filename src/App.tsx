@@ -352,15 +352,44 @@ export function App() {
   // Send Prompt to Active AI Agent
   const handleSendAgentPrompt = async (prompt: string) => {
     const snapshot = activeProject.files.map((f) => ({ ...f }));
+    const now = Date.now();
     const userMsg: AgentMessage = {
-      id: `user-${Date.now()}`,
+      id: `user-${now}`,
       role: 'user',
       agent: agentConfig.activeAgent,
       content: prompt,
       timestamp: new Date().toLocaleTimeString()
     };
+    const streamingMsgId = `ai-${now}`;
     setMessages((prev) => [...prev, userMsg]);
     setIsAgentRunning(true);
+
+    const upsertStreamingMessage = (partialText: string) => {
+      setMessages((prev) => {
+        const exists = prev.some((m) => m.id === streamingMsgId);
+        if (exists) {
+          return prev.map((m) =>
+            m.id === streamingMsgId ? { ...m, content: partialText } : m
+          );
+        }
+        return [
+          ...prev,
+          {
+            id: streamingMsgId,
+            role: 'assistant',
+            agent: agentConfig.activeAgent,
+            agentLabel:
+              agentConfig.activeAgent === 'antigravity'
+                ? `Antigravity (${agentConfig.antigravityModel})`
+                : agentConfig.activeAgent === 'claude'
+                ? `Claude (${agentConfig.claudeModel})`
+                : 'Swarm (Antigravity + Claude)',
+            content: partialText,
+            timestamp: new Date().toLocaleTimeString()
+          }
+        ];
+      });
+    };
 
     try {
       const result = await runAgentTask({
@@ -369,7 +398,8 @@ export function App() {
         files: activeProject.files,
         manifestConfig: activeProject.manifestConfig,
         firebaseConfig,
-        history: messages
+        history: messages,
+        onPartialText: upsertStreamingMessage
       });
 
       const changedFiles: PendingFileChange[] = [];
@@ -403,8 +433,8 @@ export function App() {
         });
       }
 
-      const assistantMsg: AgentMessage = {
-        id: `ai-${Date.now()}`,
+      const finalMsg: AgentMessage = {
+        id: streamingMsgId,
         role: 'assistant',
         agent: agentConfig.activeAgent,
         agentLabel: result.agentLabel,
@@ -414,19 +444,27 @@ export function App() {
         snapshotFiles: snapshot,
         modifiedFiles: modifiedByAgent
       };
-      setMessages((prev) => [...prev, assistantMsg]);
+      setMessages((prev) => {
+        const exists = prev.some((m) => m.id === streamingMsgId);
+        return exists
+          ? prev.map((m) => (m.id === streamingMsgId ? finalMsg : m))
+          : [...prev, finalMsg];
+      });
     } catch (err: any) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `err-${Date.now()}`,
-          role: 'assistant',
-          agent: agentConfig.activeAgent,
-          agentLabel: 'Errore Agente',
-          content: err.message || 'Errore durante l’esecuzione del task AI.',
-          timestamp: new Date().toLocaleTimeString()
-        }
-      ]);
+      const errMsg: AgentMessage = {
+        id: streamingMsgId,
+        role: 'assistant',
+        agent: agentConfig.activeAgent,
+        agentLabel: 'Errore Agente',
+        content: err.message || 'Errore durante l’esecuzione del task AI.',
+        timestamp: new Date().toLocaleTimeString()
+      };
+      setMessages((prev) => {
+        const exists = prev.some((m) => m.id === streamingMsgId);
+        return exists
+          ? prev.map((m) => (m.id === streamingMsgId ? errMsg : m))
+          : [...prev, errMsg];
+      });
     } finally {
       setIsAgentRunning(false);
     }

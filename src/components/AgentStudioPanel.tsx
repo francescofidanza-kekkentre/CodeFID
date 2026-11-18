@@ -90,9 +90,11 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
   const [loadingModels, setLoadingModels] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
+  const lastMessageContent = messages[messages.length - 1]?.content;
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages.length, isRunning]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+  }, [messages.length, lastMessageContent, isRunning]);
 
   const loadGeminiModels = async () => {
     setLoadingModels(true);
