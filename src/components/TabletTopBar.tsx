@@ -88,21 +88,20 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
   const logoBtnRef = useRef<HTMLButtonElement | null>(null);
 
   const handleToggleFileMenu = () => {
-    setFileMenuOpen((prev) => {
-      const next = !prev;
-      if (next && logoBtnRef.current) {
+    if (!fileMenuOpen) {
+      if (logoBtnRef.current) {
         const rect = logoBtnRef.current.getBoundingClientRect();
         setMenuPos({
-          top: Math.round(rect.bottom + 6),
+          top: Math.max(48, Math.round(rect.bottom + 6)),
           left: Math.max(8, Math.round(rect.left))
         });
       }
-      if (!next) {
-        setNewFileMode(false);
-        setNewFileName('index.html');
-      }
-      return next;
-    });
+      setNewFileMode(false);
+      setNewFileName('index.html');
+      setFileMenuOpen(true);
+    } else {
+      closeFileMenu();
+    }
   };
 
   const closeFileMenu = () => {
@@ -192,15 +191,16 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
 
         {fileMenuOpen &&
           createPortal(
-            <>
-              <div
-                className="fixed inset-0 z-[9998]"
-                onClick={closeFileMenu}
-              />
+            <div
+              style={{ zIndex: 9998 }}
+              className="fixed inset-0 bg-black/30"
+              onClick={closeFileMenu}
+            >
               <div
                 role="menu"
-                style={{ top: menuPos.top, left: menuPos.left }}
-                className="fixed z-[9999] w-68 max-w-[calc(100vw-16px)] bg-[#252526] border border-[#454545] rounded-xl shadow-2xl py-1.5 text-xs text-[#cccccc]"
+                onClick={(e) => e.stopPropagation()}
+                style={{ top: menuPos.top, left: menuPos.left, zIndex: 9999 }}
+                className="fixed w-72 max-w-[calc(100vw-16px)] bg-[#252526] border border-[#454545] rounded-xl shadow-2xl py-1.5 text-xs text-[#cccccc]"
               >
                 <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[#858585] border-b border-[#333333] mb-1">
                   File
@@ -300,7 +300,7 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
                   </div>
                 </button>
               </div>
-            </>,
+            </div>,
             document.body
           )}
 
