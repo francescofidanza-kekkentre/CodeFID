@@ -7,9 +7,11 @@ import {
   DownloadCloud,
   Eye,
   EyeOff,
+  FilePlus,
   Flame,
   FolderCode,
   FolderKanban,
+  FolderPlus,
   GitBranch,
   GitCommitHorizontal,
   Columns3,
@@ -49,6 +51,9 @@ interface TabletTopBarProps {
   bridgeConnected: boolean;
   onExportProject: () => void;
   onOpenGuidedSetup: () => void;
+  onNewFileInEmptyWorkspace: () => void;
+  onOpenNewEmptyProject: () => void;
+  onCloneNewGitRepo: () => void;
 }
 
 export const TabletTopBar: React.FC<TabletTopBarProps> = ({
@@ -69,9 +74,13 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
   firebaseConfig,
   bridgeConnected,
   onExportProject,
-  onOpenGuidedSetup
+  onOpenGuidedSetup,
+  onNewFileInEmptyWorkspace,
+  onOpenNewEmptyProject,
+  onCloneNewGitRepo
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fileMenuOpen, setFileMenuOpen] = useState(false);
 
   useEffect(() => {
     const syncFullscreen = () => {
@@ -115,15 +124,26 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
 
   return (
     <header className="min-h-[48px] bg-[#181818] border-b border-[#2b2b2b] px-2.5 lg:px-3 py-1 flex items-center justify-between gap-2 select-none shrink-0 z-20 overflow-x-auto no-scrollbar">
-      {/* Left: Brand & Project Selector */}
+      {/* Left: Brand (File Menu) & Project Selector */}
       <div className="flex items-center gap-2 shrink-0">
-        <div className="flex items-center gap-2 bg-[#252526] border border-[#3c3c3c] px-2.5 py-1 rounded-md">
+        <button
+          type="button"
+          onClick={() => setFileMenuOpen((prev) => !prev)}
+          aria-haspopup="menu"
+          aria-expanded={fileMenuOpen}
+          title="Menu File (New File, New Project, Clone Git Repo)"
+          className={`flex items-center gap-2 px-2.5 py-1 rounded-md border transition cursor-pointer ${
+            fileMenuOpen
+              ? 'bg-[#2a2d2e] border-[#007acc]'
+              : 'bg-[#252526] hover:bg-[#2a2d2e] border-[#3c3c3c]'
+          }`}
+        >
           <img
             src="./icon-192.png"
             alt="VisualFidCodingApp"
             className="w-6 h-6 rounded shrink-0"
           />
-          <div className="leading-tight hidden sm:block">
+          <div className="leading-tight hidden sm:block text-left">
             <div className="flex items-center gap-1.5">
               <span className="font-semibold text-xs tracking-tight text-[#cccccc]">
                 VisualFidCodingApp
@@ -133,7 +153,85 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
               </span>
             </div>
           </div>
-        </div>
+          <ChevronDown
+            className={`w-3.5 h-3.5 text-[#858585] shrink-0 transition-transform ${
+              fileMenuOpen ? 'rotate-180 text-white' : ''
+            }`}
+          />
+        </button>
+
+        {fileMenuOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setFileMenuOpen(false)}
+            />
+            <div
+              role="menu"
+              className="fixed top-[50px] left-2.5 z-50 w-64 bg-[#252526] border border-[#454545] rounded-xl shadow-2xl py-1.5 text-xs text-[#cccccc]"
+            >
+              <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[#858585] border-b border-[#333333] mb-1">
+                File
+              </div>
+
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setFileMenuOpen(false);
+                  onNewFileInEmptyWorkspace();
+                }}
+                className="w-full px-3 py-2 text-left hover:bg-[#094771] hover:text-white flex items-start gap-2.5 transition"
+              >
+                <FilePlus className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-semibold">New File</div>
+                  <div className="text-[10px] text-[#969696]">
+                    Apre un nuovo file in un ambiente vuoto
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setFileMenuOpen(false);
+                  onOpenNewEmptyProject();
+                }}
+                className="w-full px-3 py-2 text-left hover:bg-[#094771] hover:text-white flex items-start gap-2.5 transition"
+              >
+                <FolderPlus className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-semibold">Open new empty project</div>
+                  <div className="text-[10px] text-[#969696]">
+                    Apre un nuovo ambiente vuoto senza file
+                  </div>
+                </div>
+              </button>
+
+              <div className="border-t border-[#333333] my-1" />
+
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setFileMenuOpen(false);
+                  onCloneNewGitRepo();
+                }}
+                className="w-full px-3 py-2 text-left hover:bg-[#094771] hover:text-white flex items-start gap-2.5 transition"
+              >
+                <GitBranch className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-semibold">Clone a new Git repo</div>
+                  <div className="text-[10px] text-[#969696]">
+                    Apre un repo GitHub e lo clona sul tablet
+                  </div>
+                </div>
+              </button>
+            </div>
+          </>
+        )}
 
         {/* Template / Project Switcher */}
         <div className="flex items-center gap-1.5 bg-[#252526] hover:bg-[#2a2d2e] px-2.5 min-h-[36px] rounded-md border border-[#3c3c3c] focus-within:border-[#007acc] transition">

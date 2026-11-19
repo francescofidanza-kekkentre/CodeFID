@@ -733,7 +733,8 @@ export function App() {
           ? {
               ...p,
               name:
-                p.id === 'empty-workspace' && githubConfig.selectedRepo
+                (p.id === 'empty-workspace' || p.id.startsWith('empty-')) &&
+                githubConfig.selectedRepo
                   ? githubConfig.selectedRepo
                   : p.name,
               files: files.map((f) => ({ ...f, modified: false })),
@@ -762,6 +763,68 @@ export function App() {
         }
       ]);
     }
+  };
+
+  const handleNewFileInEmptyWorkspace = () => {
+    const name = window.prompt(
+      'Nome del nuovo file (es. index.html, app.js, styles.css):',
+      'index.html'
+    );
+    if (!name || !name.trim()) return;
+    const trimmed = name.trim();
+    const newFile: ProjectFile = {
+      path: trimmed,
+      content: '',
+      language: detectFileLanguage(trimmed),
+      modified: true
+    };
+    const newProj: PwaProject = {
+      ...createEmptyProject(),
+      id: `workspace-${Date.now()}`,
+      name: trimmed,
+      files: [newFile]
+    };
+    setProjects((prev) => [newProj, ...prev]);
+    setActiveProjectId(newProj.id);
+    setActiveFilePath(trimmed);
+    setPendingChanges(null);
+    setAgentModifiedFiles([]);
+    setExplorerOpen(true);
+    setLayoutMode('code-agent');
+  };
+
+  const handleOpenNewEmptyProject = () => {
+    const emptyProj: PwaProject = {
+      ...createEmptyProject(),
+      id: `empty-${Date.now()}`,
+      name: 'Ambiente Vuoto',
+      files: []
+    };
+    setProjects((prev) => [emptyProj, ...prev]);
+    setActiveProjectId(emptyProj.id);
+    setActiveFilePath('');
+    setPendingChanges(null);
+    setAgentModifiedFiles([]);
+    setExplorerOpen(true);
+    setLayoutMode('code-agent');
+  };
+
+  const handleCloneNewGitRepo = () => {
+    const emptyProj: PwaProject = {
+      ...createEmptyProject(),
+      id: `empty-${Date.now()}`,
+      name: 'Nuovo Repo GitHub',
+      files: []
+    };
+    setProjects((prev) => [emptyProj, ...prev]);
+    setActiveProjectId(emptyProj.id);
+    setActiveFilePath('');
+    setPendingChanges(null);
+    setAgentModifiedFiles([]);
+    setExplorerOpen(true);
+    setLayoutMode('code-agent');
+    setIntegrationsTab('github');
+    setIntegrationsOpen(true);
   };
 
   const activeFile = useMemo(
@@ -823,6 +886,9 @@ export function App() {
         bridgeConnected={agentConfig.bridgeConnected}
         onExportProject={handleExportProject}
         onOpenGuidedSetup={() => openGuidedSetup('agent')}
+        onNewFileInEmptyWorkspace={handleNewFileInEmptyWorkspace}
+        onOpenNewEmptyProject={handleOpenNewEmptyProject}
+        onCloneNewGitRepo={handleCloneNewGitRepo}
       />
 
       {/* VS Code Body: Activity Bar + Explorer Sidebar + Main Workspace */}
