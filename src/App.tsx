@@ -76,15 +76,29 @@ function createEmptyProject(): PwaProject {
       cacheStrategy: 'StaleWhileRevalidate',
       offlineFallback: true
     },
-    files: []
+    files: [],
+    chatHistory: []
   };
 }
 
 export function App() {
-  // Projects State
+  // Projects State (each project stores its own files and chatHistory)
   const [projects, setProjects] = useState<PwaProject[]>(() => {
     const saved = loadStoredJson<PwaProject[] | null>(STORAGE_KEYS.PROJECTS, null);
-    return Array.isArray(saved) && saved.length > 0 ? saved : [createEmptyProject()];
+    const list = Array.isArray(saved) && saved.length > 0 ? saved : [createEmptyProject()];
+    const hasAnyProjectHistory = list.some((p) => Array.isArray(p.chatHistory));
+    if (!hasAnyProjectHistory) {
+      const legacyChat = loadStoredJson<AgentMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, []);
+      if (legacyChat.length > 0) {
+        const storedActiveId = localStorage.getItem(STORAGE_KEYS.ACTIVE_ID) || list[0].id;
+        return list.map((p, idx) =>
+          p.id === storedActiveId || (idx === 0 && !list.some((x) => x.id === storedActiveId))
+            ? { ...p, chatHistory: serializeMessagesForStorage(legacyChat) }
+            : { ...p, chatHistory: [] }
+        );
+      }
+    }
+    return list;
   });
 
   const [activeProjectId, setActiveProjectId] = useState<string>(() => {
@@ -168,13 +182,29 @@ export function App() {
     any
   > | null>(null);
 
-  // Agent Conversation History (persisted locally across restarts)
+  // Agent Conversation History (persisted per-project inside each PwaProject)
   const [isAgentRunning, setIsAgentRunning] = useState(false);
   const agentAbortRef = useRef<AbortController | null>(null);
   const agentRunLockRef = useRef(false);
-  const [messages, setMessages] = useState<AgentMessage[]>(() =>
-    loadStoredJson<AgentMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, [])
-  );
+  const messages: AgentMessage[] = activeProject.chatHistory ?? [];
+
+  const setMessagesForProject = (
+    projectId: string,
+    updater: React.SetStateAction<AgentMessage[]>
+  ) => {
+    setProjects((prev) =>
+      prev.map((p) => {
+        if (p.id !== projectId) return p;
+        const current = p.chatHistory ?? [];
+        const next = typeof updater === 'function' ? updater(current) : updater;
+        return { ...p, chatHistory: serializeMessagesForStorage(next) };
+      })
+    );
+  };
+
+  const setMessages: React.Dispatch<React.SetStateAction<AgentMessage[]>> = (updater) => {
+    setMessagesForProject(activeProject.id, updater);
+  };
   const [agentModifiedFiles, setAgentModifiedFiles] = useState<string[]>([]);
   const [pendingChanges, setPendingChanges] = useState<PendingAgentChanges | null>(null);
 
@@ -251,9 +281,38 @@ export function App() {
     };
   }, [isAgentRunning]);
 
+  const persistProjectsToStorage = (projectList: PwaProject[]) => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projectList));
+    } catch {
+      // Fallback: strip file snapshots from chat histories if storage quota is tight
+      try {
+        const compact = projectList.map((p) => ({
+          ...p,
+          chatHistory: (p.chatHistory || [])
+            .slice(-100)
+            .map((m) => ({ ...m, snapshotFiles: undefined }))
+        }));
+        localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(compact));
+      } catch {
+        // Ignore storage errors in private mode
+      }
+    }
+  };
+
   // Save states to localStorage
   useEffect(() => {
-    saveStoredJson(STORAGE_KEYS.PROJECTS, projects);
+    persistProjectsToStorage(projects);
+  }, [projects]);
+
+  useEffect(() => {
+    const persistOnExit = () => persistProjectsToStorage(projects);
+    window.addEventListener('pagehide', persistOnExit);
+    window.addEventListener('beforeunload', persistOnExit);
+    return () => {
+      window.removeEventListener('pagehide', persistOnExit);
+      window.removeEventListener('beforeunload', persistOnExit);
+    };
   }, [projects]);
 
   useEffect(() => {
@@ -273,35 +332,6 @@ export function App() {
   useEffect(() => {
     saveStoredJson(STORAGE_KEYS.FIREBASE_CFG, firebaseConfig);
   }, [firebaseConfig]);
-
-  const persistChatMessages = (msgs: AgentMessage[]) => {
-    const withSnapshots = serializeMessagesForStorage(msgs);
-    try {
-      localStorage.setItem(STORAGE_KEYS.CHAT_MESSAGES, JSON.stringify(withSnapshots));
-    } catch {
-      // Fallback: strip file snapshots if storage quota is tight so prompts & replies are still saved
-      try {
-        const textOnly = msgs.slice(-100).map((m) => ({ ...m, snapshotFiles: undefined }));
-        localStorage.setItem(STORAGE_KEYS.CHAT_MESSAGES, JSON.stringify(textOnly));
-      } catch {
-        // Ignore storage errors in private mode
-      }
-    }
-  };
-
-  useEffect(() => {
-    persistChatMessages(messages);
-  }, [messages]);
-
-  useEffect(() => {
-    const persistChatOnExit = () => persistChatMessages(messages);
-    window.addEventListener('pagehide', persistChatOnExit);
-    window.addEventListener('beforeunload', persistChatOnExit);
-    return () => {
-      window.removeEventListener('pagehide', persistChatOnExit);
-      window.removeEventListener('beforeunload', persistChatOnExit);
-    };
-  }, [messages]);
 
   // Auto-detect local CLI bridge on mount
   const checkBridgeHealth = async () => {
@@ -417,6 +447,7 @@ export function App() {
 
     // Baseline for diffs = real saved files; working set = files incl. not-yet-accepted changes,
     // so consecutive prompts build on top of pending modifications instead of discarding them.
+    const targetProjectId = activeProject.id;
     const snapshot = activeProject.files.map((f) => ({ ...f }));
     const workingFiles = pendingChanges ? pendingChanges.updatedFiles : activeProject.files;
     const now = Date.now();
@@ -429,13 +460,13 @@ export function App() {
     };
     const streamingMsgId = `ai-${now}`;
     let lastPartial = '';
-    setMessages((prev) => [...prev, userMsg]);
+    setMessagesForProject(targetProjectId, (prev) => [...prev, userMsg]);
     setIsAgentRunning(true);
 
     const upsertStreamingMessage = (partialText: string) => {
       if (controller.signal.aborted) return;
       lastPartial = partialText;
-      setMessages((prev) => {
+      setMessagesForProject(targetProjectId, (prev) => {
         const exists = prev.some((m) => m.id === streamingMsgId);
         if (exists) {
           return prev.map((m) =>
@@ -518,7 +549,7 @@ export function App() {
         snapshotFiles: snapshot,
         modifiedFiles: modifiedByAgent
       };
-      setMessages((prev) => {
+      setMessagesForProject(targetProjectId, (prev) => {
         const exists = prev.some((m) => m.id === streamingMsgId);
         return exists
           ? prev.map((m) => (m.id === streamingMsgId ? finalMsg : m))
@@ -538,7 +569,7 @@ export function App() {
           : `${partialText ? `${partialText}\n\n` : ''}⚠️ ${rawErrMsg}`,
         timestamp: new Date().toLocaleTimeString()
       };
-      setMessages((prev) => {
+      setMessagesForProject(targetProjectId, (prev) => {
         const exists = prev.some((m) => m.id === streamingMsgId);
         return exists
           ? prev.map((m) => (m.id === streamingMsgId ? errMsg : m))
@@ -776,6 +807,7 @@ export function App() {
         'index.html'
       );
     if (!rawName || !rawName.trim()) return;
+    agentAbortRef.current?.abort();
     const trimmed = rawName.trim();
     const newFile: ProjectFile = {
       path: trimmed,
@@ -787,7 +819,8 @@ export function App() {
       ...createEmptyProject(),
       id: `workspace-${Date.now()}`,
       name: trimmed,
-      files: [newFile]
+      files: [newFile],
+      chatHistory: []
     };
     setProjects((prev) => [newProj, ...prev]);
     setActiveProjectId(newProj.id);
@@ -799,11 +832,13 @@ export function App() {
   };
 
   const handleOpenNewEmptyProject = () => {
+    agentAbortRef.current?.abort();
     const emptyProj: PwaProject = {
       ...createEmptyProject(),
       id: `empty-${Date.now()}`,
       name: 'Ambiente Vuoto',
-      files: []
+      files: [],
+      chatHistory: []
     };
     setProjects((prev) => [emptyProj, ...prev]);
     setActiveProjectId(emptyProj.id);
@@ -819,13 +854,31 @@ export function App() {
   };
 
   const handleClonedRepo = (repo: GitHubRepoSummary, files: ProjectFile[]) => {
+    agentAbortRef.current?.abort();
     const cleanFiles = files.map((f) => ({ ...f, modified: false }));
+    const cloneNoticeMsg: AgentMessage = {
+      id: `sys-${Date.now()}`,
+      role: 'assistant',
+      agent: agentConfig.activeAgent,
+      agentLabel: 'GitHub Clone',
+      content: `✅ Repository **${repo.full_name}** (${repo.default_branch || 'main'}) clonato sul tablet: ${cleanFiles.length} file caricati.`,
+      timestamp: new Date().toLocaleTimeString()
+    };
+
     const existing = projects.find((p) => p.name === repo.full_name);
     if (existing) {
       setProjects((prev) =>
         prev.map((p) =>
           p.id === existing.id
-            ? { ...p, files: cleanFiles, updatedAt: new Date().toISOString() }
+            ? {
+                ...p,
+                files: cleanFiles,
+                chatHistory: serializeMessagesForStorage([
+                  ...(p.chatHistory ?? []),
+                  cloneNoticeMsg
+                ]),
+                updatedAt: new Date().toISOString()
+              }
             : p
         )
       );
@@ -836,7 +889,8 @@ export function App() {
         id: `gh-${repo.id}-${Date.now()}`,
         name: repo.full_name,
         description: repo.description || `Clonato da ${repo.full_name}`,
-        files: cleanFiles
+        files: cleanFiles,
+        chatHistory: [cloneNoticeMsg]
       };
       setProjects((prev) => [clonedProj, ...prev]);
       setActiveProjectId(clonedProj.id);
@@ -854,17 +908,6 @@ export function App() {
       connected: true,
       lastSync: new Date().toLocaleTimeString()
     }));
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `sys-${Date.now()}`,
-        role: 'assistant',
-        agent: agentConfig.activeAgent,
-        agentLabel: 'GitHub Clone',
-        content: `✅ Repository **${repo.full_name}** (${repo.default_branch || 'main'}) clonato sul tablet: ${cleanFiles.length} file caricati.`,
-        timestamp: new Date().toLocaleTimeString()
-      }
-    ]);
   };
 
   const activeFile = useMemo(
@@ -884,9 +927,13 @@ export function App() {
         projects={projects}
         activeProject={activeProject}
         onSelectProject={(id) => {
+          if (id === activeProject.id) return;
+          agentAbortRef.current?.abort();
           setActiveProjectId(id);
           const target = projects.find((p) => p.id === id);
           setActiveFilePath(target?.files[0]?.path || '');
+          setPendingChanges(null);
+          setAgentModifiedFiles([]);
         }}
         layoutMode={layoutMode}
         onChangeLayout={(mode) => {

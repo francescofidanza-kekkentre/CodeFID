@@ -27,6 +27,7 @@ export interface PwaProject {
   updatedAt: string;
   files: ProjectFile[];
   manifestConfig: PwaManifestConfig;
+  chatHistory?: AgentMessage[];
 }
 
 export type AgentId = 'antigravity' | 'claude' | 'swarm';
