@@ -36,7 +36,7 @@ export interface GitHubRepoSummary {
 }
 
 export async function listUserRepos(token: string): Promise<GitHubRepoSummary[]> {
-  const res = await fetch(`${GH_API}/user/repos?sort=updated&per_page=25`, {
+  const res = await fetch(`${GH_API}/user/repos?sort=updated&per_page=100`, {
     headers: ghHeaders(token)
   });
   if (!res.ok) {

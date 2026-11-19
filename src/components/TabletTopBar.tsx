@@ -293,9 +293,9 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
                 >
                   <GitBranch className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                   <div>
-                    <div className="font-semibold">Clone a new Git repo</div>
+                    <div className="font-semibold">Clone a Git repo</div>
                     <div className="text-[10px] text-[#969696]">
-                      Apre un repo GitHub e lo clona sul tablet
+                      Scegli un repo dal tuo account GitHub e clonalo sul tablet
                     </div>
                   </div>
                 </button>

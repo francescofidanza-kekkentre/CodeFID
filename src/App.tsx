@@ -31,6 +31,8 @@ import { AgentStudioPanel } from './components/AgentStudioPanel';
 import { LivePwaPreview } from './components/LivePwaPreview';
 import { PwaBuilderModal } from './components/PwaBuilderModal';
 import { CommitModal } from './components/CommitModal';
+import { CloneRepoModal } from './components/CloneRepoModal';
+import { GitHubRepoSummary } from './services/githubService';
 import { IntegrationsDrawer } from './components/IntegrationsDrawer';
 import { GuidedSetupModal, GuidedStep } from './components/GuidedSetupModal';
 import { VsCodeActivityBar } from './components/VsCodeActivityBar';
@@ -152,6 +154,7 @@ export function App() {
   const [pwaStudioOpen, setPwaStudioOpen] = useState(false);
   const [commitModalOpen, setCommitModalOpen] = useState(false);
   const [commitModalMode, setCommitModalMode] = useState<'commit' | 'sync'>('commit');
+  const [cloneModalOpen, setCloneModalOpen] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const [guidedSetupOpen, setGuidedSetupOpen] = useState(false);
   const [guidedSetupStep, setGuidedSetupStep] = useState<GuidedStep>('agent');
@@ -812,21 +815,56 @@ export function App() {
   };
 
   const handleCloneNewGitRepo = () => {
-    const emptyProj: PwaProject = {
-      ...createEmptyProject(),
-      id: `empty-${Date.now()}`,
-      name: 'Nuovo Repo GitHub',
-      files: []
-    };
-    setProjects((prev) => [emptyProj, ...prev]);
-    setActiveProjectId(emptyProj.id);
-    setActiveFilePath('');
+    setCloneModalOpen(true);
+  };
+
+  const handleClonedRepo = (repo: GitHubRepoSummary, files: ProjectFile[]) => {
+    const cleanFiles = files.map((f) => ({ ...f, modified: false }));
+    const existing = projects.find((p) => p.name === repo.full_name);
+    if (existing) {
+      setProjects((prev) =>
+        prev.map((p) =>
+          p.id === existing.id
+            ? { ...p, files: cleanFiles, updatedAt: new Date().toISOString() }
+            : p
+        )
+      );
+      setActiveProjectId(existing.id);
+    } else {
+      const clonedProj: PwaProject = {
+        ...createEmptyProject(),
+        id: `gh-${repo.id}-${Date.now()}`,
+        name: repo.full_name,
+        description: repo.description || `Clonato da ${repo.full_name}`,
+        files: cleanFiles
+      };
+      setProjects((prev) => [clonedProj, ...prev]);
+      setActiveProjectId(clonedProj.id);
+    }
+
+    setActiveFilePath(cleanFiles[0]?.path || '');
     setPendingChanges(null);
     setAgentModifiedFiles([]);
     setExplorerOpen(true);
     setLayoutMode('code-agent');
-    setIntegrationsTab('github');
-    setIntegrationsOpen(true);
+    setGithubConfig((prev) => ({
+      ...prev,
+      selectedRepo: repo.full_name,
+      branch: repo.default_branch || 'main',
+      connected: true,
+      lastSync: new Date().toLocaleTimeString()
+    }));
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `sys-${Date.now()}`,
+        role: 'assistant',
+        agent: agentConfig.activeAgent,
+        agentLabel: 'GitHub Clone',
+        content: `✅ Repository **${repo.full_name}** (${repo.default_branch || 'main'}) clonato sul tablet: ${cleanFiles.length} file caricati.`,
+        timestamp: new Date().toLocaleTimeString()
+      }
+    ]);
   };
 
   const activeFile = useMemo(
@@ -917,8 +955,7 @@ export function App() {
             }
           }}
           onCloneGitHub={() => {
-            setIntegrationsTab('github');
-            setIntegrationsOpen(true);
+            setCloneModalOpen(true);
           }}
           onOpenFirebase={() => {
             setIntegrationsTab('firebase');
@@ -1196,6 +1233,18 @@ export function App() {
         activeProject={activeProject}
         onReplaceProjectFiles={handleReplaceProjectFiles}
         onClearModifiedHighlights={handleMarkProjectSynced}
+        onOpenGitHubSettings={() => {
+          setIntegrationsTab('github');
+          setIntegrationsOpen(true);
+        }}
+      />
+
+      {/* Dedicated GitHub Repo Picker & Clone Modal */}
+      <CloneRepoModal
+        isOpen={cloneModalOpen}
+        onClose={() => setCloneModalOpen(false)}
+        githubConfig={githubConfig}
+        onClonedRepo={handleClonedRepo}
         onOpenGitHubSettings={() => {
           setIntegrationsTab('github');
           setIntegrationsOpen(true);
