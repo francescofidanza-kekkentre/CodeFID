@@ -765,13 +765,15 @@ export function App() {
     }
   };
 
-  const handleNewFileInEmptyWorkspace = () => {
-    const name = window.prompt(
-      'Nome del nuovo file (es. index.html, app.js, styles.css):',
-      'index.html'
-    );
-    if (!name || !name.trim()) return;
-    const trimmed = name.trim();
+  const handleNewFileInEmptyWorkspace = (fileName?: string) => {
+    const rawName =
+      fileName ??
+      window.prompt(
+        'Nome del nuovo file (es. index.html, app.js, styles.css):',
+        'index.html'
+      );
+    if (!rawName || !rawName.trim()) return;
+    const trimmed = rawName.trim();
     const newFile: ProjectFile = {
       path: trimmed,
       content: '',

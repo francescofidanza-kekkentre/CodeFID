@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ChevronDown,
   Code2,
@@ -51,7 +52,7 @@ interface TabletTopBarProps {
   bridgeConnected: boolean;
   onExportProject: () => void;
   onOpenGuidedSetup: () => void;
-  onNewFileInEmptyWorkspace: () => void;
+  onNewFileInEmptyWorkspace: (fileName?: string) => void;
   onOpenNewEmptyProject: () => void;
   onCloneNewGitRepo: () => void;
 }
@@ -81,6 +82,34 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
+  const [newFileMode, setNewFileMode] = useState(false);
+  const [newFileName, setNewFileName] = useState('index.html');
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 50, left: 10 });
+  const logoBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  const handleToggleFileMenu = () => {
+    setFileMenuOpen((prev) => {
+      const next = !prev;
+      if (next && logoBtnRef.current) {
+        const rect = logoBtnRef.current.getBoundingClientRect();
+        setMenuPos({
+          top: Math.round(rect.bottom + 6),
+          left: Math.max(8, Math.round(rect.left))
+        });
+      }
+      if (!next) {
+        setNewFileMode(false);
+        setNewFileName('index.html');
+      }
+      return next;
+    });
+  };
+
+  const closeFileMenu = () => {
+    setFileMenuOpen(false);
+    setNewFileMode(false);
+    setNewFileName('index.html');
+  };
 
   useEffect(() => {
     const syncFullscreen = () => {
@@ -127,8 +156,9 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
       {/* Left: Brand (File Menu) & Project Selector */}
       <div className="flex items-center gap-2 shrink-0">
         <button
+          ref={logoBtnRef}
           type="button"
-          onClick={() => setFileMenuOpen((prev) => !prev)}
+          onClick={handleToggleFileMenu}
           aria-haspopup="menu"
           aria-expanded={fileMenuOpen}
           title="Menu File (New File, New Project, Clone Git Repo)"
@@ -160,78 +190,119 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
           />
         </button>
 
-        {fileMenuOpen && (
-          <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setFileMenuOpen(false)}
-            />
-            <div
-              role="menu"
-              className="fixed top-[50px] left-2.5 z-50 w-64 bg-[#252526] border border-[#454545] rounded-xl shadow-2xl py-1.5 text-xs text-[#cccccc]"
-            >
-              <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[#858585] border-b border-[#333333] mb-1">
-                File
+        {fileMenuOpen &&
+          createPortal(
+            <>
+              <div
+                className="fixed inset-0 z-[9998]"
+                onClick={closeFileMenu}
+              />
+              <div
+                role="menu"
+                style={{ top: menuPos.top, left: menuPos.left }}
+                className="fixed z-[9999] w-68 max-w-[calc(100vw-16px)] bg-[#252526] border border-[#454545] rounded-xl shadow-2xl py-1.5 text-xs text-[#cccccc]"
+              >
+                <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[#858585] border-b border-[#333333] mb-1">
+                  File
+                </div>
+
+                {!newFileMode ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => setNewFileMode(true)}
+                    className="w-full px-3 py-2 text-left hover:bg-[#094771] hover:text-white flex items-start gap-2.5 transition"
+                  >
+                    <FilePlus className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-semibold">New File</div>
+                      <div className="text-[10px] text-[#969696]">
+                        Apre un nuovo file in un ambiente vuoto
+                      </div>
+                    </div>
+                  </button>
+                ) : (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const trimmed = newFileName.trim();
+                      if (!trimmed) return;
+                      closeFileMenu();
+                      onNewFileInEmptyWorkspace(trimmed);
+                    }}
+                    className="px-3 py-2 space-y-2 bg-[#1e1e1e] border-y border-[#333333]"
+                  >
+                    <div className="text-[10px] font-semibold text-sky-300">
+                      Nome del nuovo file:
+                    </div>
+                    <input
+                      type="text"
+                      autoFocus
+                      value={newFileName}
+                      onChange={(e) => setNewFileName(e.target.value)}
+                      placeholder="es. index.html, app.js"
+                      className="w-full bg-[#141414] text-white text-xs rounded-lg px-2.5 py-1.5 border border-[#007acc] focus:outline-none"
+                    />
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setNewFileMode(false)}
+                        className="px-2.5 py-1 rounded bg-[#2d2d2d] hover:bg-[#3c3c3c] text-[11px] text-[#cccccc]"
+                      >
+                        Annulla
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={!newFileName.trim()}
+                        className="px-2.5 py-1 rounded bg-[#007acc] hover:bg-[#1f8ad2] disabled:opacity-40 text-[11px] font-semibold text-white"
+                      >
+                        Crea
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    closeFileMenu();
+                    onOpenNewEmptyProject();
+                  }}
+                  className="w-full px-3 py-2 text-left hover:bg-[#094771] hover:text-white flex items-start gap-2.5 transition"
+                >
+                  <FolderPlus className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-semibold">Open new empty project</div>
+                    <div className="text-[10px] text-[#969696]">
+                      Apre un nuovo ambiente vuoto senza file
+                    </div>
+                  </div>
+                </button>
+
+                <div className="border-t border-[#333333] my-1" />
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    closeFileMenu();
+                    onCloneNewGitRepo();
+                  }}
+                  className="w-full px-3 py-2 text-left hover:bg-[#094771] hover:text-white flex items-start gap-2.5 transition"
+                >
+                  <GitBranch className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-semibold">Clone a new Git repo</div>
+                    <div className="text-[10px] text-[#969696]">
+                      Apre un repo GitHub e lo clona sul tablet
+                    </div>
+                  </div>
+                </button>
               </div>
-
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setFileMenuOpen(false);
-                  onNewFileInEmptyWorkspace();
-                }}
-                className="w-full px-3 py-2 text-left hover:bg-[#094771] hover:text-white flex items-start gap-2.5 transition"
-              >
-                <FilePlus className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-semibold">New File</div>
-                  <div className="text-[10px] text-[#969696]">
-                    Apre un nuovo file in un ambiente vuoto
-                  </div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setFileMenuOpen(false);
-                  onOpenNewEmptyProject();
-                }}
-                className="w-full px-3 py-2 text-left hover:bg-[#094771] hover:text-white flex items-start gap-2.5 transition"
-              >
-                <FolderPlus className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-semibold">Open new empty project</div>
-                  <div className="text-[10px] text-[#969696]">
-                    Apre un nuovo ambiente vuoto senza file
-                  </div>
-                </div>
-              </button>
-
-              <div className="border-t border-[#333333] my-1" />
-
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setFileMenuOpen(false);
-                  onCloneNewGitRepo();
-                }}
-                className="w-full px-3 py-2 text-left hover:bg-[#094771] hover:text-white flex items-start gap-2.5 transition"
-              >
-                <GitBranch className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-semibold">Clone a new Git repo</div>
-                  <div className="text-[10px] text-[#969696]">
-                    Apre un repo GitHub e lo clona sul tablet
-                  </div>
-                </div>
-              </button>
-            </div>
-          </>
-        )}
+            </>,
+            document.body
+          )}
 
         {/* Template / Project Switcher */}
         <div className="flex items-center gap-1.5 bg-[#252526] hover:bg-[#2a2d2e] px-2.5 min-h-[36px] rounded-md border border-[#3c3c3c] focus-within:border-[#007acc] transition">
