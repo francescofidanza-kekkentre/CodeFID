@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   CheckCircle2,
   CloudUpload,
@@ -40,7 +40,11 @@ import {
 } from '../services/firebaseService';
 import {
   CLAUDE_MODELS,
-  DEFAULT_ANTIGRAVITY_MODELS
+  DEFAULT_ANTIGRAVITY_MODELS,
+  fetchAvailableClaudeModels,
+  fetchAvailableGeminiModels,
+  ModelOption,
+  modelSupportsThinking
 } from '../services/agentEngine';
 
 interface IntegrationsDrawerProps {
@@ -93,7 +97,36 @@ export const IntegrationsDrawer: React.FC<IntegrationsDrawerProps> = ({
   const [fbStatus, setFbStatus] = useState<string>('');
   const [fbError, setFbError] = useState<string>('');
 
+  const [geminiModels, setGeminiModels] = useState<ModelOption[]>(DEFAULT_ANTIGRAVITY_MODELS);
+  const [claudeModels, setClaudeModels] = useState<ModelOption[]>(CLAUDE_MODELS);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    fetchAvailableGeminiModels(agentConfig.geminiApiKey).then(setGeminiModels);
+  }, [isOpen, agentConfig.geminiApiKey]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    fetchAvailableClaudeModels(agentConfig.claudeApiKey).then(setClaudeModels);
+  }, [isOpen, agentConfig.claudeApiKey]);
+
   if (!isOpen) return null;
+
+  const effectiveGeminiModels = geminiModels.some((m) => m.id === agentConfig.antigravityModel)
+    ? geminiModels
+    : [{ id: agentConfig.antigravityModel, label: agentConfig.antigravityModel }, ...geminiModels];
+
+  const effectiveClaudeModels = claudeModels.some((m) => m.id === agentConfig.claudeModel)
+    ? claudeModels
+    : [{ id: agentConfig.claudeModel, label: agentConfig.claudeModel }, ...claudeModels];
+
+  const activeSupportsThinking =
+    agentConfig.activeAgent === 'antigravity'
+      ? modelSupportsThinking(agentConfig.antigravityModel, effectiveGeminiModels)
+      : agentConfig.activeAgent === 'claude'
+      ? modelSupportsThinking(agentConfig.claudeModel, effectiveClaudeModels)
+      : modelSupportsThinking(agentConfig.antigravityModel, effectiveGeminiModels) ||
+        modelSupportsThinking(agentConfig.claudeModel, effectiveClaudeModels);
 
   // GitHub handlers
   const handleConnectGitHub = async () => {
@@ -686,7 +719,7 @@ export const IntegrationsDrawer: React.FC<IntegrationsDrawerProps> = ({
                       }
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
                     >
-                      {CLAUDE_MODELS.map((m) => (
+                      {effectiveClaudeModels.map((m) => (
                         <option key={m.id} value={m.id}>
                           {m.label}
                         </option>
@@ -736,9 +769,9 @@ export const IntegrationsDrawer: React.FC<IntegrationsDrawerProps> = ({
                       }
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
                     >
-                      {DEFAULT_ANTIGRAVITY_MODELS.map((m) => (
+                      {effectiveGeminiModels.map((m) => (
                         <option key={m.id} value={m.id}>
-                          Antigravity {m.label}
+                          {m.label}
                         </option>
                       ))}
                     </select>
@@ -756,39 +789,47 @@ export const IntegrationsDrawer: React.FC<IntegrationsDrawerProps> = ({
                     </span>
                   </div>
                   <span className="text-[11px] font-semibold uppercase px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300">
-                    {agentConfig.agentLevel || 'medium'}
+                    {activeSupportsThinking ? agentConfig.agentLevel || 'medium' : 'Standard'}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400">
-                  Controlla il budget di pensiero (thinking tokens) e l'approfondimento dell'analisi prima di applicare le modifiche (Low, Medium, High).
-                </p>
-                <div className="grid grid-cols-3 gap-2 pt-1">
-                  {(['low', 'medium', 'high'] as const).map((lvl) => {
-                    const active = (agentConfig.agentLevel || 'medium') === lvl;
-                    return (
-                      <button
-                        key={lvl}
-                        type="button"
-                        onClick={() =>
-                          onUpdateAgentConfig({
-                            ...agentConfig,
-                            agentLevel: lvl
-                          })
-                        }
-                        className={`p-2 rounded-lg border text-center transition ${
-                          active
-                            ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200 font-semibold'
-                            : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        <div className="text-xs font-semibold capitalize">{lvl}</div>
-                        <div className="text-[10px] text-slate-400 mt-0.5">
-                          {lvl === 'low' ? 'Veloce / Min budget' : lvl === 'medium' ? 'Bilanciato' : 'Profondo / Max budget'}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                {activeSupportsThinking ? (
+                  <>
+                    <p className="text-xs text-slate-400">
+                      Controlla il budget di pensiero (thinking tokens) e l'approfondimento dell'analisi prima di applicare le modifiche (Low, Medium, High).
+                    </p>
+                    <div className="grid grid-cols-3 gap-2 pt-1">
+                      {(['low', 'medium', 'high'] as const).map((lvl) => {
+                        const active = (agentConfig.agentLevel || 'medium') === lvl;
+                        return (
+                          <button
+                            key={lvl}
+                            type="button"
+                            onClick={() =>
+                              onUpdateAgentConfig({
+                                ...agentConfig,
+                                agentLevel: lvl
+                              })
+                            }
+                            className={`p-2 rounded-lg border text-center transition ${
+                              active
+                                ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200 font-semibold'
+                                : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            <div className="text-xs font-semibold capitalize">{lvl}</div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">
+                              {lvl === 'low' ? 'Veloce / Min budget' : lvl === 'medium' ? 'Bilanciato' : 'Profondo / Max budget'}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-slate-400">
+                    Il modello attualmente selezionato utilizza una modalità di risposta standard e non espone livelli di thinking configurabili dal tuo account.
+                  </p>
+                )}
               </div>
 
               {/* Local / Remote CLI Bridge */}

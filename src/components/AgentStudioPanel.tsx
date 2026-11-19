@@ -1,15 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot,
   Check,
   CheckCircle2,
   Cpu,
+  Eye,
   FileCode,
   Loader2,
   RefreshCw,
   RotateCcw,
   Send,
   Sparkles,
+  Square,
   Terminal,
   Trash2,
   Users,
@@ -28,17 +30,22 @@ import {
 import {
   CLAUDE_MODELS,
   DEFAULT_ANTIGRAVITY_MODELS,
+  fetchAvailableClaudeModels,
   fetchAvailableGeminiModels,
-  ModelOption
+  ModelOption,
+  modelSupportsThinking
 } from '../services/agentEngine';
+import { computeUnifiedDiffPreview } from '../utils/fileHelpers';
 
 interface AgentStudioPanelProps {
   messages: AgentMessage[];
   agentConfig: AgentConfig;
   isRunning: boolean;
+  activeProjectFiles?: ProjectFile[];
   onChangeAgent: (agent: AgentId) => void;
   onUpdateAgentConfig: (config: AgentConfig) => void;
   onSendPrompt: (prompt: string) => void;
+  onStopAgent?: () => void;
   onRunBridgeCommand: (cmd: string) => void;
   onSelectFile: (path: string) => void;
   onRestoreSnapshot: (files: ProjectFile[]) => void;
@@ -47,6 +54,8 @@ interface AgentStudioPanelProps {
   pendingChanges?: PendingAgentChanges | null;
   onAcceptPendingChanges?: () => void;
   onRejectPendingChanges?: () => void;
+  onAcceptSingleFile?: (path: string) => void;
+  onRejectSingleFile?: (path: string) => void;
   onClearChat?: () => void;
 }
 
@@ -73,9 +82,11 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
   messages,
   agentConfig,
   isRunning,
+  activeProjectFiles = [],
   onChangeAgent,
   onUpdateAgentConfig,
   onSendPrompt,
+  onStopAgent,
   onRunBridgeCommand,
   onSelectFile,
   onRestoreSnapshot,
@@ -84,12 +95,28 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
   pendingChanges,
   onAcceptPendingChanges,
   onRejectPendingChanges,
+  onAcceptSingleFile,
+  onRejectSingleFile,
   onClearChat
 }) => {
   const [input, setInput] = useState('');
   const [geminiModels, setGeminiModels] = useState<ModelOption[]>(DEFAULT_ANTIGRAVITY_MODELS);
+  const [claudeModels, setClaudeModels] = useState<ModelOption[]>(CLAUDE_MODELS);
   const [loadingModels, setLoadingModels] = useState(false);
+  const [loadingClaudeModels, setLoadingClaudeModels] = useState(false);
+  const [expandedDiffPath, setExpandedDiffPath] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setExpandedDiffPath(pendingChanges?.files[0]?.path || null);
+  }, [pendingChanges?.id]);
+
+  const expandedDiffLines = useMemo(() => {
+    if (!pendingChanges || !expandedDiffPath) return null;
+    const oldContent = activeProjectFiles.find((f) => f.path === expandedDiffPath)?.content || '';
+    const newContent = pendingChanges.updatedFiles.find((f) => f.path === expandedDiffPath)?.content || '';
+    return computeUnifiedDiffPreview(oldContent, newContent, 80);
+  }, [pendingChanges, expandedDiffPath, activeProjectFiles]);
 
   const lastMessageContent = messages[messages.length - 1]?.content;
 
@@ -122,9 +149,46 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
     loadGeminiModels();
   }, [agentConfig.geminiApiKey]);
 
+  const loadClaudeModels = async () => {
+    setLoadingClaudeModels(true);
+    try {
+      const models = await fetchAvailableClaudeModels(agentConfig.claudeApiKey);
+      setClaudeModels(models);
+      if (models.length > 0 && !models.some((m) => m.id === agentConfig.claudeModel)) {
+        const preferred =
+          models.find((m) => m.id.includes('sonnet')) ||
+          models.find((m) => m.id.includes('opus')) ||
+          models[0];
+        onUpdateAgentConfig({
+          ...agentConfig,
+          claudeModel: preferred.id
+        });
+      }
+    } finally {
+      setLoadingClaudeModels(false);
+    }
+  };
+
+  useEffect(() => {
+    loadClaudeModels();
+  }, [agentConfig.claudeApiKey]);
+
   const effectiveGeminiModels = geminiModels.some((m) => m.id === agentConfig.antigravityModel)
     ? geminiModels
     : [{ id: agentConfig.antigravityModel, label: agentConfig.antigravityModel }, ...geminiModels];
+
+  const effectiveClaudeModels = claudeModels.some((m) => m.id === agentConfig.claudeModel)
+    ? claudeModels
+    : [{ id: agentConfig.claudeModel, label: agentConfig.claudeModel }, ...claudeModels];
+
+  const geminiSupportsThinking = modelSupportsThinking(agentConfig.antigravityModel, effectiveGeminiModels);
+  const claudeSupportsThinking = modelSupportsThinking(agentConfig.claudeModel, effectiveClaudeModels);
+  const activeSupportsThinking =
+    agentConfig.activeAgent === 'antigravity'
+      ? geminiSupportsThinking
+      : agentConfig.activeAgent === 'claude'
+      ? claudeSupportsThinking
+      : geminiSupportsThinking || claudeSupportsThinking;
 
   const activeLevelCapitalized =
     (agentConfig.agentLevel || 'medium').charAt(0).toUpperCase() +
@@ -135,7 +199,7 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
       ? effectiveGeminiModels.find((m) => m.id === agentConfig.antigravityModel)?.label ||
         agentConfig.antigravityModel
       : agentConfig.activeAgent === 'claude'
-      ? CLAUDE_MODELS.find((m) => m.id === agentConfig.claudeModel)?.label ||
+      ? effectiveClaudeModels.find((m) => m.id === agentConfig.claudeModel)?.label ||
         agentConfig.claudeModel
       : 'Swarm (AGY + Claude)';
 
@@ -290,12 +354,23 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
                 }
                 className="w-full bg-[#252526] text-[#cccccc] text-[11px] font-medium rounded px-2 py-1 border border-[#3c3c3c] focus:outline-none focus:border-[#007acc] truncate"
               >
-                {CLAUDE_MODELS.map((m) => (
+                {effectiveClaudeModels.map((m) => (
                   <option key={m.id} value={m.id} className="bg-[#252526] text-[#cccccc]">
                     {m.label}
                   </option>
                 ))}
               </select>
+              {agentConfig.claudeApiKey.trim() && (
+                <button
+                  type="button"
+                  onClick={loadClaudeModels}
+                  disabled={loadingClaudeModels}
+                  title="Aggiorna modelli disponibili dalla API Key Claude"
+                  className="p-1 rounded bg-[#252526] hover:bg-[#2a2d2e] border border-[#3c3c3c] text-[#969696] hover:text-white transition shrink-0"
+                >
+                  <RefreshCw className={`w-3 h-3 ${loadingClaudeModels ? 'animate-spin text-[#3794ff]' : ''}`} />
+                </button>
+              )}
             </div>
           )}
 
@@ -304,29 +379,38 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
             <span className="text-[9px] font-semibold uppercase tracking-wider text-[#858585] pr-0.5">
               Livello
             </span>
-            {(['low', 'medium', 'high'] as const).map((lvl) => {
-              const active = (agentConfig.agentLevel || 'medium') === lvl;
-              return (
-                <button
-                  key={lvl}
-                  type="button"
-                  onClick={() =>
-                    onUpdateAgentConfig({
-                      ...agentConfig,
-                      agentLevel: lvl
-                    })
-                  }
-                  className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition capitalize ${
-                    active
-                      ? 'bg-[#007acc] text-white font-semibold shadow-xs'
-                      : 'text-[#858585] hover:text-[#cccccc] hover:bg-[#2a2d2e]'
-                  }`}
-                  title={`Livello di ragionamento / thinking effort: ${lvl.toUpperCase()}`}
-                >
-                  {lvl === 'low' ? 'Low' : lvl === 'medium' ? 'Medium' : 'High'}
-                </button>
-              );
-            })}
+            {activeSupportsThinking ? (
+              (['low', 'medium', 'high'] as const).map((lvl) => {
+                const active = (agentConfig.agentLevel || 'medium') === lvl;
+                return (
+                  <button
+                    key={lvl}
+                    type="button"
+                    onClick={() =>
+                      onUpdateAgentConfig({
+                        ...agentConfig,
+                        agentLevel: lvl
+                      })
+                    }
+                    className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition capitalize ${
+                      active
+                        ? 'bg-[#007acc] text-white font-semibold shadow-xs'
+                        : 'text-[#858585] hover:text-[#cccccc] hover:bg-[#2a2d2e]'
+                    }`}
+                    title={`Livello di ragionamento / thinking effort: ${lvl.toUpperCase()}`}
+                  >
+                    {lvl === 'low' ? 'Low' : lvl === 'medium' ? 'Medium' : 'High'}
+                  </button>
+                );
+              })
+            ) : (
+              <span
+                className="px-1.5 py-0.5 text-[10px] font-medium text-[#858585]"
+                title="Il modello selezionato non supporta livelli di thinking configurabili"
+              >
+                Standard
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -476,21 +560,96 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
           </div>
 
           <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
-            {pendingChanges.files.map((file) => (
-              <button
-                key={file.path}
-                type="button"
-                onClick={() => onSelectFile(file.path)}
-                className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#252526] hover:bg-[#2a2d2e] border border-[#3c3c3c] text-[11px] font-mono text-[#cccccc] transition"
-                title={`Apri ${file.path} nell'editor`}
-              >
-                <FileCode className="w-3 h-3 text-[#3794ff] shrink-0" />
-                <span className="truncate max-w-[140px]">{file.path}</span>
-                <span className="text-rose-400 font-semibold">-{file.deletedLines}</span>
-                <span className="text-emerald-400 font-semibold">+{file.addedLines}</span>
-              </button>
-            ))}
+            {pendingChanges.files.map((file) => {
+              const isPreviewOpen = expandedDiffPath === file.path;
+              return (
+                <div
+                  key={file.path}
+                  className={`flex items-center gap-1 rounded border text-[11px] font-mono transition ${
+                    isPreviewOpen
+                      ? 'bg-[#252526] border-[#007acc] text-white'
+                      : 'bg-[#252526] border-[#3c3c3c] text-[#cccccc]'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelectFile(file.path);
+                      setExpandedDiffPath(isPreviewOpen ? null : file.path);
+                    }}
+                    className="flex items-center gap-1.5 px-2 py-1 hover:bg-[#2a2d2e] rounded-l transition"
+                    title={`Apri ${file.path} e mostra anteprima diff`}
+                  >
+                    <FileCode className="w-3 h-3 text-[#3794ff] shrink-0" />
+                    <span className="truncate max-w-[130px]">{file.path}</span>
+                    {file.isNew && (
+                      <span className="px-1 py-0.2 rounded bg-sky-500/20 text-[9px] text-sky-300 font-sans">
+                        NEW
+                      </span>
+                    )}
+                    <span className="text-rose-400 font-semibold">-{file.deletedLines}</span>
+                    <span className="text-emerald-400 font-semibold">+{file.addedLines}</span>
+                    <Eye className={`w-3 h-3 ml-0.5 ${isPreviewOpen ? 'text-[#3794ff]' : 'text-[#858585]'}`} />
+                  </button>
+                  {pendingChanges.files.length > 1 && onAcceptSingleFile && onRejectSingleFile && (
+                    <div className="flex items-center border-l border-[#3c3c3c] pr-1">
+                      <button
+                        type="button"
+                        onClick={() => onAcceptSingleFile(file.path)}
+                        title={`Accetta solo ${file.path}`}
+                        className="p-1 text-emerald-400 hover:bg-emerald-500/20 rounded transition"
+                      >
+                        <Check className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onRejectSingleFile(file.path)}
+                        title={`Scarta modifiche a ${file.path}`}
+                        className="p-1 text-rose-400 hover:bg-rose-500/20 rounded transition"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
+
+          {/* Inline Unified Diff Preview */}
+          {expandedDiffPath && expandedDiffLines && expandedDiffLines.length > 0 && (
+            <div className="rounded-lg border border-[#3c3c3c] bg-[#11151c] overflow-hidden">
+              <div className="px-2.5 py-1 bg-[#1e2530] border-b border-[#3c3c3c] flex items-center justify-between text-[10px] font-mono text-[#cccccc]">
+                <span className="truncate">Diff: {expandedDiffPath}</span>
+                <button
+                  type="button"
+                  onClick={() => setExpandedDiffPath(null)}
+                  className="text-[#858585] hover:text-white"
+                >
+                  Chiudi
+                </button>
+              </div>
+              <div className="max-h-36 overflow-y-auto font-mono text-[10px] leading-4 p-1.5 space-y-0.5">
+                {expandedDiffLines.map((line, idx) => (
+                  <div
+                    key={idx}
+                    className={`px-1.5 rounded-xs whitespace-pre-wrap break-all ${
+                      line.type === 'add'
+                        ? 'bg-emerald-500/15 text-emerald-300'
+                        : line.type === 'del'
+                        ? 'bg-rose-500/15 text-rose-300'
+                        : 'text-[#858585]'
+                    }`}
+                  >
+                    <span className="select-none mr-1.5 opacity-75">
+                      {line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' '}
+                    </span>
+                    {line.text || ' '}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center justify-end gap-2 pt-0.5">
             {onRejectPendingChanges && (
@@ -510,7 +669,7 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
                 className="px-3.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
               >
                 <Check className="w-3.5 h-3.5" />
-                <span>Accept</span>
+                <span>{pendingChanges.files.length > 1 ? 'Accept All' : 'Accept'}</span>
               </button>
             )}
           </div>
@@ -539,33 +698,37 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
             {activeModelDisplayName}
           </span>
           <span className="px-1.5 py-0.2 rounded bg-[#252526] border border-[#3c3c3c] text-[10px] font-semibold text-sky-400 shrink-0">
-            {activeLevelCapitalized}
+            {activeSupportsThinking ? activeLevelCapitalized : 'Standard'}
           </span>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {(['low', 'medium', 'high'] as const).map((lvl) => {
-            const active = (agentConfig.agentLevel || 'medium') === lvl;
-            return (
-              <button
-                key={lvl}
-                type="button"
-                onClick={() =>
-                  onUpdateAgentConfig({
-                    ...agentConfig,
-                    agentLevel: lvl
-                  })
-                }
-                className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition ${
-                  active
-                    ? 'bg-[#007acc] text-white font-semibold shadow-xs'
-                    : 'text-[#858585] hover:text-[#cccccc] hover:bg-[#252526]'
-                }`}
-                title={`Imposta livello: ${lvl.toUpperCase()}`}
-              >
-                {lvl === 'low' ? 'Low' : lvl === 'medium' ? 'Med' : 'High'}
-              </button>
-            );
-          })}
+          {activeSupportsThinking ? (
+            (['low', 'medium', 'high'] as const).map((lvl) => {
+              const active = (agentConfig.agentLevel || 'medium') === lvl;
+              return (
+                <button
+                  key={lvl}
+                  type="button"
+                  onClick={() =>
+                    onUpdateAgentConfig({
+                      ...agentConfig,
+                      agentLevel: lvl
+                    })
+                  }
+                  className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition ${
+                    active
+                      ? 'bg-[#007acc] text-white font-semibold shadow-xs'
+                      : 'text-[#858585] hover:text-[#cccccc] hover:bg-[#252526]'
+                  }`}
+                  title={`Imposta livello: ${lvl.toUpperCase()}`}
+                >
+                  {lvl === 'low' ? 'Low' : lvl === 'medium' ? 'Med' : 'High'}
+                </button>
+              );
+            })
+          ) : (
+            <span className="text-[10px] text-[#858585]">Livello fisso</span>
+          )}
         </div>
       </div>
 
@@ -589,14 +752,26 @@ export const AgentStudioPanel: React.FC<AgentStudioPanelProps> = ({
           />
           <Terminal className="w-3.5 h-3.5 text-[#858585] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
-        <button
-          type="submit"
-          disabled={isRunning || !input.trim()}
-          className="px-4 py-2.5 min-h-[42px] rounded bg-[#007acc] hover:bg-[#1f8ad2] disabled:opacity-40 text-white font-medium text-xs flex items-center gap-1.5 transition shrink-0"
-        >
-          <Send className="w-3.5 h-3.5" />
-          <span>Invia</span>
-        </button>
+        {isRunning && onStopAgent ? (
+          <button
+            type="button"
+            onClick={onStopAgent}
+            className="px-4 py-2.5 min-h-[42px] rounded bg-rose-600 hover:bg-rose-500 text-white font-medium text-xs flex items-center gap-1.5 transition shrink-0"
+            title="Interrompi generazione AI"
+          >
+            <Square className="w-3.5 h-3.5 fill-current" />
+            <span>Stop</span>
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={isRunning || !input.trim()}
+            className="px-4 py-2.5 min-h-[42px] rounded bg-[#007acc] hover:bg-[#1f8ad2] disabled:opacity-40 text-white font-medium text-xs flex items-center gap-1.5 transition shrink-0"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>Invia</span>
+          </button>
+        )}
       </form>
     </div>
   );

@@ -200,6 +200,53 @@ export function App() {
     };
   }, []);
 
+  // Prevent tablet screen standby (Screen Wake Lock API) while the AI agent is running
+  useEffect(() => {
+    if (!isAgentRunning) return;
+    const wakeLockApi = (
+      navigator as Navigator & {
+        wakeLock?: {
+          request: (type: 'screen') => Promise<{ release: () => Promise<void> }>;
+        };
+      }
+    ).wakeLock;
+    if (!wakeLockApi) return;
+
+    let cancelled = false;
+    let sentinel: { release: () => Promise<void> } | null = null;
+
+    const acquireWakeLock = async () => {
+      if (cancelled || document.visibilityState !== 'visible') return;
+      try {
+        sentinel = await wakeLockApi.request('screen');
+        if (cancelled) {
+          await sentinel.release().catch(() => undefined);
+          sentinel = null;
+        }
+      } catch {
+        // Ignore if battery saver or browser policy denies wake lock
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void acquireWakeLock();
+      }
+    };
+
+    void acquireWakeLock();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (sentinel) {
+        void sentinel.release().catch(() => undefined);
+        sentinel = null;
+      }
+    };
+  }, [isAgentRunning]);
+
   // Save states to localStorage
   useEffect(() => {
     saveStoredJson(STORAGE_KEYS.PROJECTS, projects);
@@ -418,6 +465,7 @@ export function App() {
         manifestConfig: activeProject.manifestConfig,
         firebaseConfig,
         history: messages,
+        activeFilePath: activeFile?.path,
         onPartialText: upsertStreamingMessage,
         signal: controller.signal
       });
@@ -475,6 +523,7 @@ export function App() {
     } catch (err: any) {
       const cancelled = err instanceof AgentCancelledError || controller.signal.aborted;
       const partialText = lastPartial.replace(/\n*⏳.*$/s, '').trim();
+      const rawErrMsg = err?.message || 'Errore durante l’esecuzione del task AI.';
       const errMsg: AgentMessage = {
         id: streamingMsgId,
         role: 'assistant',
@@ -482,7 +531,7 @@ export function App() {
         agentLabel: cancelled ? 'Interrotto' : 'Errore Agente',
         content: cancelled
           ? `${partialText ? `${partialText}\n\n` : ''}⏹ Generazione interrotta. Nessun file è stato modificato.`
-          : `⚠️ ${err?.message || 'Errore durante l’esecuzione del task AI.'}`,
+          : `${partialText ? `${partialText}\n\n` : ''}⚠️ ${rawErrMsg}`,
         timestamp: new Date().toLocaleTimeString()
       };
       setMessages((prev) => {
@@ -519,6 +568,57 @@ export function App() {
     if (!pendingChanges) return;
     setPendingChanges(null);
     setAgentModifiedFiles([]);
+  };
+
+  const handleAcceptSingleFile = (path: string) => {
+    if (!pendingChanges) return;
+    const targetFile = pendingChanges.updatedFiles.find((f) => f.path === path);
+    if (!targetFile) return;
+
+    const existingIdx = activeProject.files.findIndex((f) => f.path === path);
+    const nextProjectFiles = [...activeProject.files];
+    if (existingIdx >= 0) {
+      nextProjectFiles[existingIdx] = targetFile;
+    } else {
+      nextProjectFiles.push(targetFile);
+    }
+    updateActiveProjectFiles(nextProjectFiles);
+
+    const remainingFiles = pendingChanges.files.filter((f) => f.path !== path);
+    if (remainingFiles.length === 0) {
+      setPendingChanges(null);
+      setAgentModifiedFiles([]);
+    } else {
+      setAgentModifiedFiles(remainingFiles.map((f) => f.path));
+      setPendingChanges({
+        ...pendingChanges,
+        files: remainingFiles,
+        totalDeletedLines: remainingFiles.reduce((acc, f) => acc + f.deletedLines, 0),
+        totalAddedLines: remainingFiles.reduce((acc, f) => acc + f.addedLines, 0)
+      });
+    }
+  };
+
+  const handleRejectSingleFile = (path: string) => {
+    if (!pendingChanges) return;
+    const remainingFiles = pendingChanges.files.filter((f) => f.path !== path);
+    if (remainingFiles.length === 0) {
+      setPendingChanges(null);
+      setAgentModifiedFiles([]);
+    } else {
+      const originalFile = activeProject.files.find((f) => f.path === path);
+      const nextUpdatedFiles = originalFile
+        ? pendingChanges.updatedFiles.map((f) => (f.path === path ? originalFile : f))
+        : pendingChanges.updatedFiles.filter((f) => f.path !== path);
+      setAgentModifiedFiles(remainingFiles.map((f) => f.path));
+      setPendingChanges({
+        ...pendingChanges,
+        files: remainingFiles,
+        updatedFiles: nextUpdatedFiles,
+        totalDeletedLines: remainingFiles.reduce((acc, f) => acc + f.deletedLines, 0),
+        totalAddedLines: remainingFiles.reduce((acc, f) => acc + f.addedLines, 0)
+      });
+    }
   };
 
   // Execute command via CLI Bridge (!command)
@@ -806,11 +906,13 @@ export function App() {
                 messages={messages}
                 agentConfig={agentConfig}
                 isRunning={isAgentRunning}
+                activeProjectFiles={activeProject.files}
                 onChangeAgent={(agent) =>
                   setAgentConfig((prev) => ({ ...prev, activeAgent: agent }))
                 }
                 onUpdateAgentConfig={setAgentConfig}
                 onSendPrompt={handleSendAgentPrompt}
+                onStopAgent={handleStopAgent}
                 onRunBridgeCommand={handleRunBridgeCommand}
                 onSelectFile={(path) => setActiveFilePath(path)}
                 onRestoreSnapshot={(files) => updateActiveProjectFiles(files)}
@@ -822,6 +924,8 @@ export function App() {
                 pendingChanges={pendingChanges}
                 onAcceptPendingChanges={handleAcceptPendingChanges}
                 onRejectPendingChanges={handleRejectPendingChanges}
+                onAcceptSingleFile={handleAcceptSingleFile}
+                onRejectSingleFile={handleRejectSingleFile}
                 onClearChat={handleClearChat}
               />
             </div>
@@ -835,11 +939,13 @@ export function App() {
                 messages={messages}
                 agentConfig={agentConfig}
                 isRunning={isAgentRunning}
+                activeProjectFiles={activeProject.files}
                 onChangeAgent={(agent) =>
                   setAgentConfig((prev) => ({ ...prev, activeAgent: agent }))
                 }
                 onUpdateAgentConfig={setAgentConfig}
                 onSendPrompt={handleSendAgentPrompt}
+                onStopAgent={handleStopAgent}
                 onRunBridgeCommand={handleRunBridgeCommand}
                 onSelectFile={(path) => setActiveFilePath(path)}
                 onRestoreSnapshot={(files) => updateActiveProjectFiles(files)}
@@ -851,6 +957,8 @@ export function App() {
                 pendingChanges={pendingChanges}
                 onAcceptPendingChanges={handleAcceptPendingChanges}
                 onRejectPendingChanges={handleRejectPendingChanges}
+                onAcceptSingleFile={handleAcceptSingleFile}
+                onRejectSingleFile={handleRejectSingleFile}
                 onClearChat={handleClearChat}
               />
             </div>

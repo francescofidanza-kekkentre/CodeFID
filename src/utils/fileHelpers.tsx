@@ -136,3 +136,103 @@ export function computeLineDiffStats(
     added: n - lcs
   };
 }
+
+export interface DiffLine {
+  type: 'add' | 'del' | 'ctx';
+  text: string;
+}
+
+/**
+ * Generates a compact line-level diff preview showing context and changed lines.
+ */
+export function computeUnifiedDiffPreview(
+  oldText: string,
+  newText: string,
+  maxLines = 120
+): DiffLine[] {
+  const oldLines = oldText === '' ? [] : oldText.split('\n');
+  const newLines = newText === '' ? [] : newText.split('\n');
+
+  if (oldLines.length === 0) {
+    return newLines.slice(0, maxLines).map((text) => ({ type: 'add', text }));
+  }
+  if (newLines.length === 0) {
+    return oldLines.slice(0, maxLines).map((text) => ({ type: 'del', text }));
+  }
+
+  let prefix = 0;
+  while (
+    prefix < oldLines.length &&
+    prefix < newLines.length &&
+    oldLines[prefix] === newLines[prefix]
+  ) {
+    prefix++;
+  }
+  let suffix = 0;
+  while (
+    suffix < oldLines.length - prefix &&
+    suffix < newLines.length - prefix &&
+    oldLines[oldLines.length - 1 - suffix] === newLines[newLines.length - 1 - suffix]
+  ) {
+    suffix++;
+  }
+
+  const a = oldLines.slice(prefix, oldLines.length - suffix);
+  const b = newLines.slice(prefix, newLines.length - suffix);
+  const out: DiffLine[] = [];
+
+  if (prefix > 0) {
+    const ctxStart = Math.max(0, prefix - 2);
+    for (let i = ctxStart; i < prefix; i++) {
+      out.push({ type: 'ctx', text: oldLines[i] });
+    }
+  }
+
+  if (a.length * b.length <= 160_000) {
+    const m = a.length;
+    const n = b.length;
+    const dp: Uint16Array[] = Array.from({ length: m + 1 }, () => new Uint16Array(n + 1));
+    for (let i = m - 1; i >= 0; i--) {
+      for (let j = n - 1; j >= 0; j--) {
+        dp[i][j] =
+          a[i] === b[j]
+            ? dp[i + 1][j + 1] + 1
+            : dp[i + 1][j] >= dp[i][j + 1]
+            ? dp[i + 1][j]
+            : dp[i][j + 1];
+      }
+    }
+    let i = 0;
+    let j = 0;
+    while (i < m && j < n && out.length < maxLines) {
+      if (a[i] === b[j]) {
+        out.push({ type: 'ctx', text: a[i] });
+        i++;
+        j++;
+      } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+        out.push({ type: 'del', text: a[i++] });
+      } else {
+        out.push({ type: 'add', text: b[j++] });
+      }
+    }
+    while (i < m && out.length < maxLines) out.push({ type: 'del', text: a[i++] });
+    while (j < n && out.length < maxLines) out.push({ type: 'add', text: b[j++] });
+  } else {
+    for (const line of a.slice(0, Math.floor(maxLines / 2))) {
+      out.push({ type: 'del', text: line });
+    }
+    for (const line of b.slice(0, Math.floor(maxLines / 2))) {
+      out.push({ type: 'add', text: line });
+    }
+  }
+
+  if (suffix > 0 && out.length < maxLines) {
+    const endStart = newLines.length - suffix;
+    const ctxEnd = Math.min(newLines.length, endStart + 2);
+    for (let i = endStart; i < ctxEnd && out.length < maxLines; i++) {
+      out.push({ type: 'ctx', text: newLines[i] });
+    }
+  }
+
+  return out;
+}

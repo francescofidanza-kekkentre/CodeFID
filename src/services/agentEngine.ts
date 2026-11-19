@@ -21,21 +21,40 @@ export interface AgentExecutionResult {
 export interface ModelOption {
   id: string;
   label: string;
+  supportsThinking?: boolean;
 }
 
 export const DEFAULT_ANTIGRAVITY_MODELS: ModelOption[] = [
-  { id: 'gemini-4-argon', label: 'Gemini 4 Argon' },
-  { id: 'gemini-4-hydrogen', label: 'Gemini 4 Hydrogen' },
-  { id: 'gemini-4-carbon', label: 'Gemini 4 Carbon' },
-  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' }
+  { id: 'gemini-4-argon', label: 'Gemini 4 Argon', supportsThinking: true },
+  { id: 'gemini-4-hydrogen', label: 'Gemini 4 Hydrogen', supportsThinking: true },
+  { id: 'gemini-4-carbon', label: 'Gemini 4 Carbon', supportsThinking: true },
+  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', supportsThinking: true }
 ];
 
 export const CLAUDE_MODELS: ModelOption[] = [
-  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (Consigliato Coding)' },
-  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5' },
-  { id: 'claude-3-7-sonnet-latest', label: 'Claude 3.7 Sonnet' },
-  { id: 'claude-3-5-haiku-latest', label: 'Claude 3.5 Haiku (Fast)' }
+  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (Consigliato Coding)', supportsThinking: true },
+  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5', supportsThinking: true },
+  { id: 'claude-3-7-sonnet-latest', label: 'Claude 3.7 Sonnet', supportsThinking: true },
+  { id: 'claude-3-5-haiku-latest', label: 'Claude 3.5 Haiku (Fast)', supportsThinking: false }
 ];
+
+export function isGeminiThinkingModel(id: string, apiFlag?: boolean): boolean {
+  if (typeof apiFlag === 'boolean') return apiFlag;
+  return /thinking|gemini-2\.5|gemini-3|gemini-4/i.test(id);
+}
+
+export function isClaudeThinkingModel(id: string): boolean {
+  return /claude-(3-7|sonnet-4|opus-4|haiku-4|sonnet-5|opus-5|4-|5-)/i.test(id);
+}
+
+export function modelSupportsThinking(modelId: string, modelsList?: ModelOption[]): boolean {
+  const found = modelsList?.find((m) => m.id === modelId);
+  if (found && typeof found.supportsThinking === 'boolean') {
+    return found.supportsThinking;
+  }
+  if (/claude/i.test(modelId)) return isClaudeThinkingModel(modelId);
+  return isGeminiThinkingModel(modelId);
+}
 
 export function getLevelDisplayName(level?: ModelLevel): string {
   if (level === 'low') return 'Low';
@@ -68,8 +87,7 @@ export function getClaudeThinkingBudget(level?: ModelLevel): number {
 }
 
 /**
- * Fetches all available Gemini models supporting generateContent for the given API key
- * (paginating through all pages and excluding retired gemini-2.5 models).
+ * Fetches all available Gemini models supporting generateContent for the given API key.
  * Falls back to DEFAULT_ANTIGRAVITY_MODELS if the key is empty or the request fails.
  */
 export async function fetchAvailableGeminiModels(apiKey: string): Promise<ModelOption[]> {
@@ -97,7 +115,6 @@ export async function fetchAvailableGeminiModels(apiKey: string): Promise<ModelO
         (m: any) =>
           typeof m?.name === 'string' &&
           m.name.includes('gemini') &&
-          !m.name.includes('gemini-2.5') &&
           !m.name.includes('-live') &&
           !m.name.includes('-tts') &&
           !m.name.includes('-image') &&
@@ -110,7 +127,8 @@ export async function fetchAvailableGeminiModels(apiKey: string): Promise<ModelO
         const id = m.name.replace(/^models\//, '');
         return {
           id,
-          label: m.displayName ? `${m.displayName} (${id})` : id
+          label: m.displayName ? `${m.displayName} (${id})` : id,
+          supportsThinking: isGeminiThinkingModel(id, typeof m.thinking === 'boolean' ? m.thinking : undefined)
         };
       })
       .sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true }));
@@ -121,7 +139,45 @@ export async function fetchAvailableGeminiModels(apiKey: string): Promise<ModelO
   }
 }
 
-function buildSystemPrompt(agent: AgentId, files: ProjectFile[]): string {
+/**
+ * Fetches all available Claude models for the given Anthropic API key.
+ * Falls back to CLAUDE_MODELS if the key is empty or the request fails.
+ */
+export async function fetchAvailableClaudeModels(apiKey: string): Promise<ModelOption[]> {
+  const trimmed = apiKey.trim();
+  if (!trimmed) return CLAUDE_MODELS;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/models?limit=100', {
+      method: 'GET',
+      headers: {
+        'x-api-key': trimmed,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      }
+    });
+    if (!res.ok) return CLAUDE_MODELS;
+    const data = await res.json();
+    const rawList = Array.isArray(data?.data) ? data.data : [];
+    const models: ModelOption[] = rawList
+      .filter((m: any) => typeof m?.id === 'string' && m.id.includes('claude'))
+      .map((m: any) => ({
+        id: m.id,
+        label: m.display_name ? `${m.display_name} (${m.id})` : m.id,
+        supportsThinking: isClaudeThinkingModel(m.id)
+      }))
+      .sort((a: ModelOption, b: ModelOption) => b.id.localeCompare(a.id, undefined, { numeric: true }));
+
+    return models.length > 0 ? models : CLAUDE_MODELS;
+  } catch {
+    return CLAUDE_MODELS;
+  }
+}
+
+function buildSystemPrompt(
+  agent: AgentId,
+  files: ProjectFile[],
+  activeFilePath?: string
+): string {
   const MAX_FILE_CHARS = 18_000;
   const fileContext = files
     .map((f) => {
@@ -129,7 +185,8 @@ function buildSystemPrompt(agent: AgentId, files: ProjectFile[]): string {
         f.content.length > MAX_FILE_CHARS
           ? `${f.content.slice(0, 12_000)}\n/* ... [${f.path} troncato per limite token: ${f.content.length} caratteri totali] ... */`
           : f.content;
-      return `--- FILE: ${f.path} ---\n${content}`;
+      const activeTag = activeFilePath && f.path === activeFilePath ? ' [APERTO NELL\'EDITOR]' : '';
+      return `--- FILE: ${f.path}${activeTag} ---\n${content}`;
     })
     .join('\n\n');
 
@@ -140,16 +197,37 @@ function buildSystemPrompt(agent: AgentId, files: ProjectFile[]): string {
       ? 'Sei Google Antigravity Agent integrato in CodeFID (Tablet PWA Studio). Sei un agente autonomo full-stack specializzato in pianificazione multi-step, Service Worker offline-first, integrazione Firebase e GitHub CI/CD.'
       : 'Siete un Dual-Agent Swarm composto da Antigravity (Architect & PWA/Cloud Systems) e Claude (UI/UX & Frontend Code).';
 
+  const activeInfo = activeFilePath
+    ? `\nFile attualmente attivo nell'editor dell'utente: "${activeFilePath}". Se l'utente fa riferimento a "questo file", "qui" o non specifica un percorso, riferisciti prioritariamente a questo file.`
+    : '';
+
   return `${roleHeader}
-Rispondi sempre in italiano in modo conciso e tecnico.
-Se l'utente chiede di creare o modificare codice della PWA, oltre alla spiegazione puoi restituire un blocco JSON racchiuso tra \`\`\`json-patch e \`\`\` con il formato:
+Rispondi sempre in italiano in modo conciso e tecnico.${activeInfo}
+
+Se l'utente chiede di creare o modificare codice, oltre a una breve spiegazione restituisci un blocco JSON racchiuso tra \`\`\`json-patch e \`\`\` con UNO di questi due formati per ogni file modificato:
+1. Modifica mirata (PREFERITA per file esistenti, veloce e sicura):
 {
   "files": [
-    { "path": "index.html", "content": "..." }
+    {
+      "path": "src/App.tsx",
+      "edits": [
+        { "search": "riga o blocco esatto esistente", "replace": "nuovo codice sostitutivo" }
+      ]
+    }
   ],
   "summary": "Breve descrizione della modifica"
 }
-Includi in "files" SOLO i file effettivamente modificati o creati (non ripetere i file invariati).
+2. Riscrittura completa o nuovo file (quando crei un file nuovo o cambi quasi tutto):
+{
+  "files": [
+    { "path": "nuovo.html", "content": "contenuto completo del file senza segnaposto" }
+  ],
+  "summary": "Breve descrizione della modifica"
+}
+Regole importanti:
+- Includi in "files" SOLO i file effettivamente modificati o creati.
+- In "edits", il campo "search" deve corrispondere esattamente al testo attuale del file (includi 2-3 righe di contesto se serve renderlo univoco).
+- In "content", scrivi sempre il file intero senza omettere parti con commenti tipo "// resto del codice".
 
 File attuali del progetto:
 ${fileContext}`;
@@ -197,6 +275,128 @@ export interface ParsedPatchResult {
   patchError?: string;
 }
 
+function applySearchReplaceEdits(
+  original: string,
+  edits: Array<{ search?: unknown; replace?: unknown }>
+): { content: string; applied: number; failed: number } {
+  let content = original;
+  let applied = 0;
+  let failed = 0;
+
+  for (const edit of edits) {
+    if (typeof edit?.search !== 'string' || typeof edit?.replace !== 'string' || !edit.search) {
+      failed++;
+      continue;
+    }
+    let idx = content.indexOf(edit.search);
+    if (idx < 0) {
+      // Fallback: normalize CRLF -> LF on both sides
+      const normContent = content.replace(/\r\n/g, '\n');
+      const normSearch = edit.search.replace(/\r\n/g, '\n');
+      const normIdx = normContent.indexOf(normSearch);
+      if (normIdx >= 0) {
+        content =
+          normContent.slice(0, normIdx) +
+          edit.replace.replace(/\r\n/g, '\n') +
+          normContent.slice(normIdx + normSearch.length);
+        applied++;
+        continue;
+      }
+      failed++;
+      continue;
+    }
+    content = content.slice(0, idx) + edit.replace + content.slice(idx + edit.search.length);
+    applied++;
+  }
+
+  return { content, applied, failed };
+}
+
+function sanitizeLlmJson(raw: string): string {
+  let out = '';
+  let inString = false;
+  let i = 0;
+
+  while (i < raw.length) {
+    const ch = raw[i];
+    if (inString) {
+      if (ch === '\\') {
+        const next = raw[i + 1];
+        if (next === undefined) {
+          out += '\\\\';
+          i++;
+          continue;
+        }
+        if ('"\\/bfnrtu'.includes(next)) {
+          out += ch + next;
+          i += 2;
+          continue;
+        }
+        // Invalid JSON escape (e.g. \', \s, \d in code): escape the backslash
+        out += '\\\\';
+        i++;
+        continue;
+      }
+      if (ch === '"') {
+        inString = false;
+        out += ch;
+        i++;
+        continue;
+      }
+      if (ch === '\n') {
+        out += '\\n';
+        i++;
+        continue;
+      }
+      if (ch === '\r') {
+        out += '\\r';
+        i++;
+        continue;
+      }
+      if (ch === '\t') {
+        out += '\\t';
+        i++;
+        continue;
+      }
+      const code = ch.charCodeAt(0);
+      if (code < 0x20) {
+        out += `\\u${code.toString(16).padStart(4, '0')}`;
+        i++;
+        continue;
+      }
+      out += ch;
+      i++;
+    } else {
+      if (ch === '"') {
+        inString = true;
+        out += ch;
+        i++;
+        continue;
+      }
+      // Remove trailing comma before } or ]
+      if (ch === ',') {
+        let j = i + 1;
+        while (j < raw.length && /\s/.test(raw[j])) j++;
+        if (raw[j] === '}' || raw[j] === ']') {
+          i++;
+          continue;
+        }
+      }
+      out += ch;
+      i++;
+    }
+  }
+  return out;
+}
+
+function parseRelaxedJson(raw: string): any {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return JSON.parse(sanitizeLlmJson(raw));
+  }
+}
+
 function parseJsonPatch(rawText: string, currentFiles: ProjectFile[]): ParsedPatchResult {
   const fence =
     rawText.match(/```json-patch\b/) ||
@@ -225,7 +425,7 @@ function parseJsonPatch(rawText: string, currentFiles: ProjectFile[]): ParsedPat
   const cleanedText = [textBefore, textAfter].filter(Boolean).join('\n\n');
 
   try {
-    const parsed = JSON.parse(jsonStr);
+    const parsed = parseRelaxedJson(jsonStr);
     if (!Array.isArray(parsed.files)) {
       return {
         cleanedText,
@@ -237,20 +437,40 @@ function parseJsonPatch(rawText: string, currentFiles: ProjectFile[]): ParsedPat
     const nextFiles = [...currentFiles];
     const toolCalls: AgentToolCall[] = [];
     const skipped: string[] = [];
+    const failedEdits: string[] = [];
 
     for (const patch of parsed.files) {
       const path = sanitizePatchPath(patch?.path);
-      if (!path || typeof patch.content !== 'string') {
+      if (!path) {
         if (patch?.path) skipped.push(String(patch.path));
         continue;
       }
+
       const idx = nextFiles.findIndex((f) => f.path === path);
       const lang = detectFileLanguage(path);
-      const lineCount = patch.content.split('\n').length;
+      let nextContent: string | null = null;
+
+      if (Array.isArray(patch.edits) && idx >= 0) {
+        const res = applySearchReplaceEdits(nextFiles[idx].content, patch.edits);
+        if (res.failed > 0) {
+          failedEdits.push(`${path} (${res.failed} sostituzioni non trovate)`);
+        }
+        if (res.applied > 0) {
+          nextContent = res.content;
+        }
+      } else if (typeof patch.content === 'string') {
+        nextContent = patch.content;
+      } else {
+        skipped.push(path);
+        continue;
+      }
+
+      if (nextContent === null) continue;
+      const lineCount = nextContent.split('\n').length;
 
       if (idx >= 0) {
-        if (nextFiles[idx].content === patch.content) continue;
-        nextFiles[idx] = { ...nextFiles[idx], content: patch.content, modified: true };
+        if (nextFiles[idx].content === nextContent) continue;
+        nextFiles[idx] = { ...nextFiles[idx], content: nextContent, modified: true };
         toolCalls.push({
           id: `tc-${Date.now()}-${path}`,
           tool: 'edit_file',
@@ -260,7 +480,7 @@ function parseJsonPatch(rawText: string, currentFiles: ProjectFile[]): ParsedPat
           diffPreview: `File aggiornato (${lineCount} righe)`
         });
       } else {
-        nextFiles.push({ path, content: patch.content, language: lang, modified: true });
+        nextFiles.push({ path, content: nextContent, language: lang, modified: true });
         toolCalls.push({
           id: `tc-${Date.now()}-${path}`,
           tool: 'write_file',
@@ -272,13 +492,15 @@ function parseJsonPatch(rawText: string, currentFiles: ProjectFile[]): ParsedPat
       }
     }
 
+    const errors: string[] = [];
+    if (skipped.length) errors.push(`Percorsi non validi o incompleti ignorati: ${skipped.join(', ')}`);
+    if (failedEdits.length) errors.push(`Alcune sostituzioni mirate non sono corrisposte: ${failedEdits.join(', ')}`);
+
     return {
       cleanedText: cleanedText || parsed.summary || 'Modifiche pronte.',
       updatedFiles: nextFiles,
       toolCalls,
-      patchError: skipped.length
-        ? `Ignorati percorsi non validi: ${skipped.join(', ')}`
-        : undefined
+      patchError: errors.length ? errors.join(' · ') : undefined
     };
   } catch {
     return {
@@ -301,6 +523,7 @@ export class AgentCancelledError extends Error {
 export interface AgentRunOptions {
   signal?: AbortSignal;
   onPartialText?: (partialText: string) => void;
+  activeFilePath?: string;
 }
 
 const CONNECT_TIMEOUT_MS = 60_000;
@@ -480,7 +703,10 @@ async function readGeminiSseText(
       throw new Error(`Richiesta bloccata dai filtri di sicurezza Gemini (${blockReason}).`);
     }
     const full =
-      data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').join('') || '';
+      data?.candidates?.[0]?.content?.parts
+        ?.filter((p: any) => !p?.thought)
+        .map((p: any) => p.text || '')
+        .join('') || '';
     onPartialText?.(formatStreamingPreview(full));
     return { text: full, truncated: data?.candidates?.[0]?.finishReason === 'MAX_TOKENS' };
   }
@@ -643,32 +869,64 @@ async function callClaudeApi(
   options: AgentRunOptions = {}
 ): Promise<AgentExecutionResult> {
   const model = config.claudeModel || 'claude-sonnet-5-5';
+  const supportsThinking = isClaudeThinkingModel(model);
   const levelName = getLevelDisplayName(config.agentLevel);
+  const claudeBudget = getClaudeThinkingBudget(config.agentLevel);
   const turns = buildConversationTurns(history, prompt);
-  const requestInit: RequestInit = {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': config.claudeApiKey.trim(),
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
+
+  const buildRequestInit = (withThinking: boolean): RequestInit => {
+    const bodyObj: Record<string, any> = {
       model,
       max_tokens: 16384,
       stream: true,
-      system: buildSystemPrompt('claude', files),
+      system: buildSystemPrompt('claude', files, options.activeFilePath),
       messages: turns
-    })
+    };
+    if (withThinking) {
+      bodyObj.thinking = {
+        type: 'enabled',
+        budget_tokens: claudeBudget
+      };
+    }
+    return {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': config.claudeApiKey.trim(),
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify(bodyObj)
+    };
   };
 
-  let res = await fetchWithRetry('https://api.anthropic.com/v1/messages', requestInit, options.signal);
+  let res = await fetchWithRetry(
+    'https://api.anthropic.com/v1/messages',
+    buildRequestInit(supportsThinking),
+    options.signal
+  );
+
+  // Fallback if the model/account rejects extended thinking
+  if (!res.ok && res.status === 400 && supportsThinking) {
+    const errBody = await res.clone().text().catch(() => '');
+    if (/thinking|budget_tokens/i.test(errBody)) {
+      res = await fetchWithRetry(
+        'https://api.anthropic.com/v1/messages',
+        buildRequestInit(false),
+        options.signal
+      );
+    }
+  }
 
   // Rate-limit / overload: wait once using retry-after if provided
   if (res.status === 429 || res.status === 529) {
     const retryAfter = Number(res.headers.get('retry-after')) || 3;
     await sleep(Math.min(retryAfter, 10) * 1000, options.signal);
-    res = await fetchWithRetry('https://api.anthropic.com/v1/messages', requestInit, options.signal);
+    res = await fetchWithRetry(
+      'https://api.anthropic.com/v1/messages',
+      buildRequestInit(supportsThinking),
+      options.signal
+    );
   }
 
   if (!res.ok) {
@@ -684,7 +942,7 @@ async function callClaudeApi(
 
   return {
     replyText: cleanedText,
-    agentLabel: `Claude (${model} ${levelName})`,
+    agentLabel: supportsThinking ? `Claude (${model} ${levelName})` : `Claude (${model})`,
     toolCalls,
     updatedFiles
   };
@@ -698,8 +956,7 @@ async function callGeminiAntigravityApi(
   history?: AgentMessage[],
   options: AgentRunOptions = {}
 ): Promise<AgentExecutionResult> {
-  const rawModel = config.antigravityModel || 'gemini-4-hydrogen';
-  const primaryModel = rawModel.startsWith('gemini-2.5') ? 'gemini-4-hydrogen' : rawModel;
+  const primaryModel = config.antigravityModel || 'gemini-4-hydrogen';
   const levelName = getLevelDisplayName(config.agentLevel);
   const thinkingBudget = getGeminiThinkingBudget(config.agentLevel);
   const fallbackChain = [
@@ -721,7 +978,7 @@ async function callGeminiAntigravityApi(
     }
     return JSON.stringify({
       systemInstruction: {
-        parts: [{ text: buildSystemPrompt(agentMode, files) }]
+        parts: [{ text: buildSystemPrompt(agentMode, files, options.activeFilePath) }]
       },
       contents: turns.map((t) => ({
         role: t.role === 'assistant' ? 'model' : 'user',
@@ -742,14 +999,18 @@ async function callGeminiAntigravityApi(
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${candidate}:streamGenerateContent?alt=sse&key=${encodeURIComponent(
       config.geminiApiKey.trim()
     )}`;
-    // First try with thinkingConfig
+    const candidateSupportsThinking = isGeminiThinkingModel(candidate);
     res = await fetchWithRetry(
       url,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: buildRequestBody(true) },
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: buildRequestBody(candidateSupportsThinking)
+      },
       options.signal
     );
     // If rejected with 400 (e.g. model doesn't support thinkingConfig), retry without thinkingConfig
-    if (!res.ok && res.status === 400) {
+    if (!res.ok && res.status === 400 && candidateSupportsThinking) {
       const errClone = res.clone();
       const errBody = await errClone.text().catch(() => '');
       if (/thinking|unknown field|invalid argument/i.test(errBody)) {
@@ -798,12 +1059,14 @@ async function callGeminiAntigravityApi(
   const fallbackNote =
     usedModel !== primaryModel ? `\n\nℹ️ Risposta generata con ${usedModel} (fallback da ${primaryModel}).` : '';
 
+  const usedSupportsThinking = isGeminiThinkingModel(usedModel);
+
   return {
     replyText: cleanedText + fallbackNote,
     agentLabel:
       agentMode === 'swarm'
-        ? `Swarm (Antigravity ${levelName} + Claude)`
-        : `Antigravity (${usedModel} ${levelName})`,
+        ? `Swarm (Antigravity${usedSupportsThinking ? ` ${levelName}` : ''} + Claude)`
+        : `Antigravity (${usedModel}${usedSupportsThinking ? ` ${levelName}` : ''})`,
     toolCalls,
     updatedFiles
   };
@@ -816,12 +1079,22 @@ export async function runAgentTask(params: {
   manifestConfig: PwaManifestConfig;
   firebaseConfig: FirebaseConfig;
   history?: AgentMessage[];
+  activeFilePath?: string;
   onPartialText?: (partialText: string) => void;
   signal?: AbortSignal;
 }): Promise<AgentExecutionResult> {
-  const { prompt, agentConfig, files, manifestConfig, firebaseConfig, history, onPartialText, signal } =
-    params;
-  const runOptions: AgentRunOptions = { onPartialText, signal };
+  const {
+    prompt,
+    agentConfig,
+    files,
+    manifestConfig,
+    firebaseConfig,
+    history,
+    activeFilePath,
+    onPartialText,
+    signal
+  } = params;
+  const runOptions: AgentRunOptions = { onPartialText, signal, activeFilePath };
   const activeAgent = agentConfig.activeAgent;
 
   const hasClaude = Boolean(agentConfig.claudeApiKey.trim());
@@ -839,6 +1112,7 @@ export async function runAgentTask(params: {
         history,
         {
           signal,
+          activeFilePath,
           onPartialText: onPartialText
             ? (t) => onPartialText(`### 1. Antigravity\n${t}`)
             : undefined
@@ -850,6 +1124,7 @@ export async function runAgentTask(params: {
       const step1Header = `### 1. Antigravity (${agentConfig.antigravityModel || 'Gemini'} ${levelName})\n${step1.replyText}\n\n---\n\n`;
       const step2 = await callClaudeApi(claudePrompt, agentConfig, step1.updatedFiles, history, {
         signal,
+        activeFilePath,
         onPartialText: onPartialText
           ? (t) => onPartialText(`${step1Header}### 2. Claude\n${t}`)
           : undefined
