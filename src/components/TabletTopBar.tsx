@@ -4,6 +4,7 @@ import {
   Code2,
   Cpu,
   Download,
+  DownloadCloud,
   Eye,
   EyeOff,
   Flame,
@@ -42,6 +43,7 @@ interface TabletTopBarProps {
   onOpenPwaStudio: () => void;
   onOpenIntegrations: (tab: 'github' | 'firebase' | 'agents') => void;
   onOpenCommitModal: () => void;
+  onOpenSyncModal: () => void;
   githubConfig: GitHubConfig;
   firebaseConfig: FirebaseConfig;
   bridgeConnected: boolean;
@@ -62,6 +64,7 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
   onOpenPwaStudio,
   onOpenIntegrations,
   onOpenCommitModal,
+  onOpenSyncModal,
   githubConfig,
   firebaseConfig,
   bridgeConnected,
@@ -295,14 +298,24 @@ export const TabletTopBar: React.FC<TabletTopBarProps> = ({
           <span>PWA {pwaScore}%</span>
         </button>
 
-        {/* Dedicated Commit & Sync Button */}
+        {/* Dedicated Commit Button */}
         <button
           onClick={onOpenCommitModal}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition"
-          title="Commit su GitHub e Sync"
+          title="Esegui Commit & Push su GitHub"
         >
           <GitCommitHorizontal className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Commit</span>
+        </button>
+
+        {/* Dedicated Sync (Pull) Button */}
+        <button
+          onClick={onOpenSyncModal}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-300 text-xs font-semibold transition"
+          title="Sync (Pull) da GitHub"
+        >
+          <DownloadCloud className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Sync</span>
         </button>
 
         {/* GitHub Integration Button */}

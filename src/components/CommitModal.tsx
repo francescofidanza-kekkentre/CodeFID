@@ -18,6 +18,7 @@ import {
 
 interface CommitModalProps {
   isOpen: boolean;
+  mode?: 'commit' | 'sync';
   onClose: () => void;
   githubConfig: GitHubConfig;
   onUpdateGithubConfig: (cfg: GitHubConfig) => void;
@@ -28,11 +29,11 @@ interface CommitModalProps {
 }
 
 /**
- * Focused modal dedicated exclusively to GitHub Commit (with required commit name)
- * and Sync (Pull), keeping repository/token configuration out of the way.
+ * Focused modal for GitHub Commit (mode="commit") or Sync/Pull (mode="sync").
  */
 export const CommitModal: React.FC<CommitModalProps> = ({
   isOpen,
+  mode = 'commit',
   onClose,
   githubConfig,
   onUpdateGithubConfig,
@@ -134,6 +135,7 @@ export const CommitModal: React.FC<CommitModalProps> = ({
       setStatusMsg(
         `Sync completato: ${files.length} file sincronizzati da ${githubConfig.selectedRepo}.`
       );
+      setSessionCompleted(true);
     } catch (err: any) {
       setErrorMsg(err.message || 'Errore durante il sync da GitHub.');
     } finally {
@@ -150,12 +152,22 @@ export const CommitModal: React.FC<CommitModalProps> = ({
         {/* Focused Header */}
         <div className="px-4 py-3 bg-[#252526] border-b border-[#2b2b2b] flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shrink-0">
-              <GitCommitHorizontal className="w-4 h-4" />
+            <div
+              className={`p-2 rounded-xl border shrink-0 ${
+                mode === 'sync'
+                  ? 'bg-sky-500/15 border-sky-500/30 text-sky-400'
+                  : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+              }`}
+            >
+              {mode === 'sync' ? (
+                <DownloadCloud className="w-4 h-4" />
+              ) : (
+                <GitCommitHorizontal className="w-4 h-4" />
+              )}
             </div>
             <div className="min-w-0">
               <h2 className="text-sm font-bold text-white truncate">
-                Commit & Sync GitHub
+                {mode === 'sync' ? 'Sync da GitHub (Pull)' : 'Commit su GitHub'}
               </h2>
               <div className="flex items-center gap-1.5 text-[11px] text-[#969696] truncate">
                 <GitBranch className="w-3 h-3 shrink-0" />
@@ -210,14 +222,15 @@ export const CommitModal: React.FC<CommitModalProps> = ({
             </div>
           )}
 
-          {/* SEZIONE 1: COMMIT SU GITHUB */}
+          {/* SEZIONE COMMIT SU GITHUB */}
+          {mode === 'commit' && (
           <form
             onSubmit={handleCommit}
             className="p-3.5 rounded-xl bg-[#202022] border border-[#333333] space-y-3"
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">
-                1. Commit su GitHub
+                Commit & Push su GitHub
               </span>
               <span className="text-[11px] text-[#969696]">
                 {modifiedFiles.length > 0
@@ -280,12 +293,14 @@ export const CommitModal: React.FC<CommitModalProps> = ({
               <span>Esegui Commit su GitHub</span>
             </button>
           </form>
+          )}
 
-          {/* SEZIONE 2: SYNC CON GITHUB */}
+          {/* SEZIONE SYNC CON GITHUB */}
+          {mode === 'sync' && (
           <div className="p-3.5 rounded-xl bg-[#202022] border border-[#333333] space-y-2.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-sky-300">
-                2. Sync con GitHub
+                Sync (Pull) da GitHub
               </span>
               {githubConfig.lastSync && (
                 <span className="text-[10px] text-[#858585]">
@@ -300,16 +315,17 @@ export const CommitModal: React.FC<CommitModalProps> = ({
               type="button"
               onClick={handleSync}
               disabled={sessionCompleted || !isGitHubReady || loadingAction !== null}
-              className="w-full py-2.5 px-4 rounded-xl bg-[#2a2d2e] hover:bg-[#373b3d] disabled:opacity-40 disabled:cursor-not-allowed border border-[#3c3c3c] text-[#e0e0e0] text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition"
+              className="w-full py-2.5 px-4 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition"
             >
               {loadingAction === 'sync' ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <DownloadCloud className="w-4 h-4 text-sky-400" />
+                <DownloadCloud className="w-4 h-4" />
               )}
               <span>Sync (Pull da GitHub)</span>
             </button>
           </div>
+          )}
 
           {statusMsg && (
             <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2">

@@ -151,6 +151,7 @@ export function App() {
   // Modals & Drawers
   const [pwaStudioOpen, setPwaStudioOpen] = useState(false);
   const [commitModalOpen, setCommitModalOpen] = useState(false);
+  const [commitModalMode, setCommitModalMode] = useState<'commit' | 'sync'>('commit');
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const [guidedSetupOpen, setGuidedSetupOpen] = useState(false);
   const [guidedSetupStep, setGuidedSetupStep] = useState<GuidedStep>('agent');
@@ -809,7 +810,14 @@ export function App() {
           setIntegrationsTab(tab);
           setIntegrationsOpen(true);
         }}
-        onOpenCommitModal={() => setCommitModalOpen(true)}
+        onOpenCommitModal={() => {
+          setCommitModalMode('commit');
+          setCommitModalOpen(true);
+        }}
+        onOpenSyncModal={() => {
+          setCommitModalMode('sync');
+          setCommitModalOpen(true);
+        }}
         githubConfig={githubConfig}
         firebaseConfig={firebaseConfig}
         bridgeConnected={agentConfig.bridgeConnected}
@@ -1110,9 +1118,10 @@ export function App() {
         onFixWithAgent={handleSendAgentPrompt}
       />
 
-      {/* Focused GitHub Commit & Sync Modal */}
+      {/* Focused GitHub Commit / Sync Modal */}
       <CommitModal
         isOpen={commitModalOpen}
+        mode={commitModalMode}
         onClose={() => setCommitModalOpen(false)}
         githubConfig={githubConfig}
         onUpdateGithubConfig={setGithubConfig}
