@@ -740,6 +740,10 @@ export function App() {
               setIntegrationsOpen(true);
             }
           }}
+          onCloneGitHub={() => {
+            setIntegrationsTab('github');
+            setIntegrationsOpen(true);
+          }}
           onOpenFirebase={() => {
             setIntegrationsTab('firebase');
             setIntegrationsOpen(true);

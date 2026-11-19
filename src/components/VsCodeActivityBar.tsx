@@ -24,6 +24,7 @@ interface VsCodeActivityBarProps {
   onSelectFile: (path: string) => void;
   onCreateFile: (path: string) => void;
   onOpenGitHub: () => void;
+  onCloneGitHub: () => void;
   onOpenFirebase: () => void;
   onOpenPwaStudio: () => void;
   onOpenSettings: () => void;
@@ -51,6 +52,7 @@ export const VsCodeActivityBar: React.FC<VsCodeActivityBarProps> = ({
   onSelectFile,
   onCreateFile,
   onOpenGitHub,
+  onCloneGitHub,
   onOpenFirebase,
   onOpenPwaStudio,
   onOpenSettings,
@@ -177,13 +179,22 @@ export const VsCodeActivityBar: React.FC<VsCodeActivityBarProps> = ({
         <div className="w-52 lg:w-56 bg-[#181818] border-r border-[#2b2b2b] flex flex-col h-full overflow-hidden">
           <div className="h-9 px-3 flex items-center justify-between text-[11px] font-semibold tracking-wider text-[#bbbbbb] uppercase border-b border-[#2b2b2b] shrink-0">
             <span>Explorer</span>
-            <button
-              onClick={handleNewFilePrompt}
-              title="Nuovo File"
-              className="p-1 rounded hover:bg-[#2a2d2e] text-[#cccccc] hover:text-white transition"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={onCloneGitHub}
+                title="Clona repository da GitHub"
+                className="p-1 rounded hover:bg-[#2a2d2e] text-[#cccccc] hover:text-emerald-400 transition"
+              >
+                <GitBranch className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={handleNewFilePrompt}
+                title="Nuovo File"
+                className="p-1 rounded hover:bg-[#2a2d2e] text-[#cccccc] hover:text-white transition"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
           <div className="px-2 py-1.5 flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-[#cccccc] bg-[#1f1f1f] border-b border-[#2b2b2b] shrink-0">
@@ -203,6 +214,13 @@ export const VsCodeActivityBar: React.FC<VsCodeActivityBarProps> = ({
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Nuovo File</span>
+                </button>
+                <button
+                  onClick={onCloneGitHub}
+                  className="w-full py-1.5 px-2.5 rounded bg-[#252526] hover:bg-[#2a2d2e] border border-[#3c3c3c] text-[#cccccc] hover:text-white text-[11px] font-medium flex items-center justify-center gap-1.5 transition"
+                >
+                  <GitBranch className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Clona da GitHub</span>
                 </button>
               </div>
             ) : (
