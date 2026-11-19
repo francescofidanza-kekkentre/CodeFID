@@ -90,6 +90,9 @@ export function App() {
     if (!hasAnyProjectHistory) {
       const legacyChat = loadStoredJson<AgentMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, []);
       if (legacyChat.length > 0) {
+        try {
+          localStorage.removeItem(STORAGE_KEYS.CHAT_MESSAGES);
+        } catch {}
         const storedActiveId = localStorage.getItem(STORAGE_KEYS.ACTIVE_ID) || list[0].id;
         return list.map((p, idx) =>
           p.id === storedActiveId || (idx === 0 && !list.some((x) => x.id === storedActiveId))
@@ -761,6 +764,32 @@ export function App() {
   };
 
   const handleReplaceProjectFiles = (files: ProjectFile[], notice?: string) => {
+    const cleanFiles = files.map((f) => ({ ...f, modified: false }));
+    const isGitHubCloneOfDifferentRepo =
+      Boolean(notice?.startsWith('Importati')) &&
+      Boolean(githubConfig.selectedRepo) &&
+      activeProject.name !== githubConfig.selectedRepo &&
+      activeProject.id !== 'empty-workspace' &&
+      !activeProject.id.startsWith('empty-');
+
+    if (isGitHubCloneOfDifferentRepo) {
+      agentAbortRef.current?.abort();
+      const clonedProj: PwaProject = {
+        ...createEmptyProject(),
+        id: `gh-import-${Date.now()}`,
+        name: githubConfig.selectedRepo,
+        description: `Clonato da ${githubConfig.selectedRepo}`,
+        files: cleanFiles,
+        chatHistory: []
+      };
+      setProjects((prev) => [clonedProj, ...prev]);
+      setActiveProjectId(clonedProj.id);
+      setActiveFilePath(cleanFiles[0]?.path || '');
+      setAgentModifiedFiles([]);
+      setPendingChanges(null);
+      return;
+    }
+
     setProjects((prev) =>
       prev.map((p) =>
         p.id === activeProject.id
@@ -771,7 +800,12 @@ export function App() {
                 githubConfig.selectedRepo
                   ? githubConfig.selectedRepo
                   : p.name,
-              files: files.map((f) => ({ ...f, modified: false })),
+              files: cleanFiles,
+              chatHistory:
+                notice?.startsWith('Importati') &&
+                (p.id === 'empty-workspace' || p.id.startsWith('empty-'))
+                  ? []
+                  : p.chatHistory,
               updatedAt: new Date().toISOString()
             }
           : p
@@ -779,12 +813,12 @@ export function App() {
     );
     setAgentModifiedFiles([]);
     setPendingChanges(null);
-    if (files.length > 0 && !files.some((f) => f.path === activeFilePath)) {
-      setActiveFilePath(files[0].path);
-    } else if (files.length === 0) {
+    if (cleanFiles.length > 0 && !cleanFiles.some((f) => f.path === activeFilePath)) {
+      setActiveFilePath(cleanFiles[0].path);
+    } else if (cleanFiles.length === 0) {
       setActiveFilePath('');
     }
-    if (notice) {
+    if (notice && !notice.startsWith('Importati')) {
       setMessages((prev) => [
         ...prev,
         {
@@ -856,15 +890,6 @@ export function App() {
   const handleClonedRepo = (repo: GitHubRepoSummary, files: ProjectFile[]) => {
     agentAbortRef.current?.abort();
     const cleanFiles = files.map((f) => ({ ...f, modified: false }));
-    const cloneNoticeMsg: AgentMessage = {
-      id: `sys-${Date.now()}`,
-      role: 'assistant',
-      agent: agentConfig.activeAgent,
-      agentLabel: 'GitHub Clone',
-      content: `✅ Repository **${repo.full_name}** (${repo.default_branch || 'main'}) clonato sul tablet: ${cleanFiles.length} file caricati.`,
-      timestamp: new Date().toLocaleTimeString()
-    };
-
     const existing = projects.find((p) => p.name === repo.full_name);
     if (existing) {
       setProjects((prev) =>
@@ -873,10 +898,7 @@ export function App() {
             ? {
                 ...p,
                 files: cleanFiles,
-                chatHistory: serializeMessagesForStorage([
-                  ...(p.chatHistory ?? []),
-                  cloneNoticeMsg
-                ]),
+                chatHistory: [],
                 updatedAt: new Date().toISOString()
               }
             : p
@@ -890,7 +912,7 @@ export function App() {
         name: repo.full_name,
         description: repo.description || `Clonato da ${repo.full_name}`,
         files: cleanFiles,
-        chatHistory: [cloneNoticeMsg]
+        chatHistory: []
       };
       setProjects((prev) => [clonedProj, ...prev]);
       setActiveProjectId(clonedProj.id);
