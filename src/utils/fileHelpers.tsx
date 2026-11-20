@@ -5,8 +5,13 @@ import { ProjectFile } from '../types/ide';
 const EXTENSION_LANGUAGE_MAP: Record<string, ProjectFile['language']> = {
   html: 'html',
   htm: 'html',
+  svg: 'html',
+  xml: 'html',
   css: 'css',
+  scss: 'css',
+  less: 'css',
   json: 'json',
+  webmanifest: 'json',
   md: 'markdown',
   yml: 'yaml',
   yaml: 'yaml'

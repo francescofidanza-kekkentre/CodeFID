@@ -178,17 +178,68 @@ function buildSystemPrompt(
   files: ProjectFile[],
   activeFilePath?: string
 ): string {
+  const MAX_ACTIVE_FILE_CHARS = 28_000;
   const MAX_FILE_CHARS = 18_000;
-  const fileContext = files
-    .map((f) => {
-      const content =
-        f.content.length > MAX_FILE_CHARS
-          ? `${f.content.slice(0, 12_000)}\n/* ... [${f.path} troncato per limite token: ${f.content.length} caratteri totali] ... */`
-          : f.content;
-      const activeTag = activeFilePath && f.path === activeFilePath ? ' [APERTO NELL\'EDITOR]' : '';
-      return `--- FILE: ${f.path}${activeTag} ---\n${content}`;
-    })
-    .join('\n\n');
+  const MAX_TOTAL_CHARS = 160_000;
+
+  const filePriority = (path: string): number => {
+    if (activeFilePath && path === activeFilePath) return 0;
+    const lower = path.toLowerCase();
+    if (lower.endsWith('package-lock.json') || lower.endsWith('yarn.lock') || lower.endsWith('pnpm-lock.yaml')) {
+      return 99;
+    }
+    if (lower.startsWith('src/')) return 1;
+    if (
+      lower === 'index.html' ||
+      lower === 'package.json' ||
+      lower.startsWith('vite.config.') ||
+      lower.startsWith('tsconfig') ||
+      lower.startsWith('public/')
+    ) {
+      return 2;
+    }
+    if (lower.startsWith('docs/') || lower.endsWith('.md')) return 4;
+    return 3;
+  };
+
+  const sortedFiles = [...files].sort((a, b) => {
+    const pa = filePriority(a.path);
+    const pb = filePriority(b.path);
+    if (pa !== pb) return pa - pb;
+    return a.path.localeCompare(b.path);
+  });
+
+  const fileListSummary = files.map((f) => `- ${f.path}`).join('\n');
+  let totalChars = 0;
+  const includedBlocks: string[] = [];
+  const omittedPaths: string[] = [];
+
+  for (const f of sortedFiles) {
+    if (filePriority(f.path) >= 99) {
+      omittedPaths.push(f.path);
+      continue;
+    }
+    const perFileLimit = activeFilePath && f.path === activeFilePath ? MAX_ACTIVE_FILE_CHARS : MAX_FILE_CHARS;
+    const content =
+      f.content.length > perFileLimit
+        ? `${f.content.slice(0, perFileLimit - 2000)}\n/* ... [${f.path} troncato per limite token: ${f.content.length} caratteri totali] ... */`
+        : f.content;
+    const activeTag = activeFilePath && f.path === activeFilePath ? " [APERTO NELL'EDITOR]" : '';
+    const block = `--- FILE: ${f.path}${activeTag} ---\n${content}`;
+    if (totalChars + block.length > MAX_TOTAL_CHARS && includedBlocks.length > 0) {
+      omittedPaths.push(f.path);
+      continue;
+    }
+    includedBlocks.push(block);
+    totalChars += block.length;
+  }
+
+  const fileContext =
+    `Elenco completo dei file nel workspace (${files.length}):\n${fileListSummary}` +
+    (omittedPaths.length > 0
+      ? `\n\n(Contenuto omesso per budget token: ${omittedPaths.join(', ')})`
+      : '') +
+    `\n\n${includedBlocks.join('\n\n')}`;
 
   const roleHeader =
     agent === 'claude'

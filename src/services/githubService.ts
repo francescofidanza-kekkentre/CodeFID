@@ -141,6 +141,51 @@ export async function pushProjectToGitHub(params: {
   };
 }
 
+const IGNORED_PATH_SEGMENTS = [
+  'node_modules/',
+  'dist/',
+  'build/',
+  '.git/',
+  'android/',
+  'ios/',
+  '.next/',
+  'coverage/'
+];
+
+const IGNORED_FILENAMES = new Set([
+  'package-lock.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
+  'bun.lockb'
+]);
+
+const TEXT_CODE_EXT_RE =
+  /\.(html|htm|css|scss|less|js|jsx|ts|tsx|mjs|cjs|json|webmanifest|md|yml|yaml|svg|xml|txt|toml|sh)$/i;
+
+function isSupportedRepoFile(path: string): boolean {
+  const lower = path.toLowerCase();
+  if (IGNORED_PATH_SEGMENTS.some((seg) => lower.includes(seg))) return false;
+  const baseName = lower.split('/').pop() || '';
+  if (IGNORED_FILENAMES.has(baseName)) return false;
+  return TEXT_CODE_EXT_RE.test(baseName);
+}
+
+function repoFilePriority(path: string): number {
+  const lower = path.toLowerCase();
+  if (lower.startsWith('src/')) return 0;
+  if (
+    lower === 'index.html' ||
+    lower === 'package.json' ||
+    lower.startsWith('vite.config.') ||
+    lower.startsWith('tsconfig') ||
+    lower.startsWith('public/')
+  ) {
+    return 1;
+  }
+  if (lower.startsWith('docs/') || lower.endsWith('.md')) return 3;
+  return 2;
+}
+
 export async function pullRepoFilesFromGitHub(params: {
   token: string;
   repoFullName: string;
@@ -155,35 +200,60 @@ export async function pullRepoFilesFromGitHub(params: {
     throw new Error(`Impossibile leggere il branch ${branch} (${treeRes.status})`);
   }
   const treeData = await treeRes.json();
-  const blobs = (treeData.tree || []).filter(
-    (item: any) =>
-      item.type === 'blob' &&
-      /\.(html|css|js|json|md|yml|yaml)$/i.test(item.path) &&
-      !item.path.includes('node_modules/') &&
-      (item.size || 0) < 120000
-  );
+  const blobs = (treeData.tree || [])
+    .filter(
+      (item: any) =>
+        item.type === 'blob' &&
+        typeof item.path === 'string' &&
+        isSupportedRepoFile(item.path) &&
+        (item.size || 0) < 250_000
+    )
+    .sort((a: any, b: any) => {
+      const pa = repoFilePriority(a.path);
+      const pb = repoFilePriority(b.path);
+      if (pa !== pb) return pa - pb;
+      return a.path.localeCompare(b.path);
+    })
+    .slice(0, 120);
 
   const loadedFiles: ProjectFile[] = [];
-  for (const blob of blobs.slice(0, 15)) {
-    const fileRes = await fetch(
-      `${GH_API}/repos/${repoFullName}/contents/${blob.path}?ref=${encodeURIComponent(branch)}`,
-      { headers: ghHeaders(token) }
-    );
-    if (!fileRes.ok) continue;
-    const fileData = await fileRes.json();
-    if (!fileData.content) continue;
-    const language = detectFileLanguage(blob.path);
+  const BATCH_SIZE = 8;
 
-    loadedFiles.push({
-      path: blob.path,
-      content: decodeBase64Utf8(fileData.content),
-      language,
-      modified: false
-    });
+  for (let i = 0; i < blobs.length; i += BATCH_SIZE) {
+    const batch = blobs.slice(i, i + BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map(async (blob: any): Promise<ProjectFile | null> => {
+        try {
+          const url = blob.sha
+            ? `${GH_API}/repos/${repoFullName}/git/blobs/${blob.sha}`
+            : `${GH_API}/repos/${repoFullName}/contents/${blob.path
+                .split('/')
+                .map(encodeURIComponent)
+                .join('/')}?ref=${encodeURIComponent(branch)}`;
+          const fileRes = await fetch(url, { headers: ghHeaders(token) });
+          if (!fileRes.ok) return null;
+          const fileData = await fileRes.json();
+          if (!fileData.content) return null;
+          return {
+            path: blob.path,
+            content: decodeBase64Utf8(fileData.content),
+            language: detectFileLanguage(blob.path),
+            modified: false
+          };
+        } catch {
+          return null;
+        }
+      })
+    );
+    for (const file of results) {
+      if (file) loadedFiles.push(file);
+    }
   }
 
+  loadedFiles.sort((a, b) => a.path.localeCompare(b.path));
+
   if (!loadedFiles.length) {
-    throw new Error('Nessun file web compatibile trovato nel repository selezionato.');
+    throw new Error('Nessun file di codice compatibile trovato nel repository selezionato.');
   }
   return loadedFiles;
 }
